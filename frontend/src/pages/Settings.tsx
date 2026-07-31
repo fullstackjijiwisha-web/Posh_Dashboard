@@ -16,11 +16,25 @@ const PERM_LABEL: Record<Permission, string> = {
   'edit:intake': 'Register / edit intake',
   'edit:inquiry': 'Record findings & stages',
   'edit:settings': 'System settings',
+  'workflow:administer': 'Screen intake, assign boards, decide',
+  'workflow:committee': 'Act for the Internal Committee',
+  'workflow:complainant': 'Act as complainant on own case',
+  'admin:provision': 'Provision POSH Admin accounts',
 }
 
 const MATRIX: Record<Role, Permission[]> = {
-  employee: ['view:inquiry'],
+  employee: ['view:inquiry', 'workflow:complainant'],
   hr_spoc: ['view:identities', 'view:all_cases', 'edit:intake'],
+  posh_admin: [
+    'view:identities',
+    'view:all_cases',
+    'view:inquiry',
+    'view:audit',
+    'view:analytics',
+    'edit:intake',
+    'edit:inquiry',
+    'workflow:administer',
+  ],
   presiding_officer: [
     'view:identities',
     'view:all_cases',
@@ -29,10 +43,23 @@ const MATRIX: Record<Role, Permission[]> = {
     'view:analytics',
     'edit:intake',
     'edit:inquiry',
+    'workflow:committee',
   ],
-  ic_member: ['view:identities', 'view:all_cases', 'view:inquiry', 'view:audit', 'edit:inquiry'],
-  external_member: ['view:identities', 'view:all_cases', 'view:inquiry', 'view:audit'],
-  legal: ['view:identities', 'view:all_cases', 'view:audit', 'view:analytics'],
+  ic_member: [
+    'view:identities',
+    'view:all_cases',
+    'view:inquiry',
+    'view:audit',
+    'edit:inquiry',
+    'workflow:committee',
+  ],
+  external_member: [
+    'view:identities',
+    'view:all_cases',
+    'view:inquiry',
+    'view:audit',
+    'workflow:committee',
+  ],
   management: ['view:all_cases', 'view:analytics'],
   super_admin: [
     'view:identities',
@@ -43,18 +70,21 @@ const MATRIX: Record<Role, Permission[]> = {
     'edit:intake',
     'edit:inquiry',
     'edit:settings',
+    'workflow:administer',
+    'workflow:committee',
+    'admin:provision',
   ],
 }
 
 const NOTES: Record<Role, string> = {
   employee: 'Own case only. Never sees respondent identity.',
   hr_spoc: 'Intake fields only — cannot open inquiry content.',
+  posh_admin: 'Custodian of the process. Never sits on the committee.',
   presiding_officer: 'Full access on assigned cases; drives the inquiry.',
   ic_member: 'Full inquiry access on assigned cases.',
   external_member: 'Inquiry access; conflict declarations required.',
-  legal: 'Closed / archived cases + audit. Read-only.',
   management: 'Aggregates only. Identities always masked (s.16).',
-  super_admin: 'Full platform control. Every action is logged.',
+  super_admin: 'Owner panel. Full platform control; every action logged.',
 }
 
 export function SettingsPage() {

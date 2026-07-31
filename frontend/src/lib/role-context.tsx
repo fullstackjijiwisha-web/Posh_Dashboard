@@ -19,10 +19,24 @@ import type { Case, Permission, Role, User } from './data/types'
  */
 
 const PERMISSIONS: Record<Role, Permission[]> = {
-  // Sees only their own case; respondent identity withheld.
-  employee: ['view:inquiry'],
+  // Sees only their own case; respondent identity withheld. Acts as complainant:
+  // files, uploads evidence when asked, reads the outcome, gives feedback.
+  employee: ['view:inquiry', 'workflow:complainant'],
   // Intake and administrative fields only — no inquiry content.
   hr_spoc: ['view:identities', 'view:all_cases', 'edit:intake'],
+  // Custodian of the process end to end, but never a member of the committee: screens
+  // intake, opens the docket, assigns the board, audits the recommendation, records
+  // the employer decision, closes and archives.
+  posh_admin: [
+    'view:identities',
+    'view:all_cases',
+    'view:inquiry',
+    'view:audit',
+    'view:analytics',
+    'edit:intake',
+    'edit:inquiry',
+    'workflow:administer',
+  ],
   // Full access to assigned cases.
   presiding_officer: [
     'view:identities',
@@ -32,13 +46,28 @@ const PERMISSIONS: Record<Role, Permission[]> = {
     'view:analytics',
     'edit:intake',
     'edit:inquiry',
+    'workflow:committee',
   ],
-  ic_member: ['view:identities', 'view:all_cases', 'view:inquiry', 'view:audit', 'edit:inquiry'],
-  external_member: ['view:identities', 'view:all_cases', 'view:inquiry', 'view:audit'],
-  // Read-only: closed cases and audit trails.
-  legal: ['view:identities', 'view:all_cases', 'view:audit', 'view:analytics'],
+  ic_member: [
+    'view:identities',
+    'view:all_cases',
+    'view:inquiry',
+    'view:audit',
+    'edit:inquiry',
+    'workflow:committee',
+  ],
+  external_member: [
+    'view:identities',
+    'view:all_cases',
+    'view:inquiry',
+    'view:audit',
+    'workflow:committee',
+  ],
   // Aggregate statistics only. Note the absence of 'view:identities'.
   management: ['view:all_cases', 'view:analytics'],
+  // Owner and super administrator are one panel. It provisions POSH Admin accounts —
+  // the only capability nobody else holds — and can drive any workflow step so a
+  // single sign-in can walk the whole lifecycle during a demo.
   super_admin: [
     'view:identities',
     'view:all_cases',
@@ -48,11 +77,25 @@ const PERMISSIONS: Record<Role, Permission[]> = {
     'edit:intake',
     'edit:inquiry',
     'edit:settings',
+    'workflow:administer',
+    'workflow:committee',
+    'admin:provision',
   ],
 }
 
 /** The employee persona owns the flagship case as complainant. */
 const EMPLOYEE_CASE_ID = 'POSH-2026-0142'
+
+/**
+ * The one listing rule, exported so the workflow store applies exactly the same test to
+ * cases raised during the session. Two copies of this rule would eventually disagree,
+ * and the disagreement would be a confidentiality bug rather than a display bug.
+ */
+export function casesVisibleTo(role: Role | null, cases: Case[]): Case[] {
+  if (!role) return []
+  if (role === 'employee') return cases.filter((c) => c.id === EMPLOYEE_CASE_ID || c.raisedBy === 'employee')
+  return cases
+}
 
 export interface RoleState {
   currentUser: User | null
@@ -88,13 +131,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     [currentRole],
   )
 
-  const visibleCases = useMemo(() => {
-    if (!currentRole) return []
-    if (currentRole === 'employee') return CASES.filter((c) => c.id === EMPLOYEE_CASE_ID)
-    // Legal is read-only over closed cases and audit trails.
-    if (currentRole === 'legal') return CASES.filter((c) => c.stage === 'closed' || c.stage === 'archived')
-    return CASES
-  }, [currentRole])
+  // Legal is read-only over closed cases and audit trails; the employee sees only
+  // their own. Both rules live in casesVisibleTo so the workflow store shares them.
+  const visibleCases = useMemo(() => casesVisibleTo(currentRole, CASES), [currentRole])
 
   const value = useMemo<RoleState>(() => {
     const visibleIds = new Set(visibleCases.map((c) => c.id))

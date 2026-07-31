@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Plus, Search } from 'lucide-react'
-import { CASES, DEPARTMENTS, LOCATIONS, hasLiveInquiryClock } from '../lib/data/cases'
+import { DEPARTMENTS, LOCATIONS, hasLiveInquiryClock } from '../lib/data/cases'
 import { CASE_STAGES, STAGE_LABEL, type Case, type CaseStage, type Priority } from '../lib/data/types'
 import { actorInitials, actorName } from '../lib/data/users'
 import { useRole } from '../lib/role-context'
+import { useWorkflow } from '../lib/workflow/store'
 import { formatDate } from '../lib/format'
 import { Dropdown } from '../components/ui/Dropdown'
 import { StagePill } from '../components/ui/StagePill'
@@ -107,7 +108,11 @@ const TABLE_MIN_WIDTH = COLUMNS.reduce((sum, c) => sum + c.width, 0)
 
 export function CaseInboxPage() {
   const navigate = useNavigate()
-  const { can, maskParty, visibleCases } = useRole()
+  const { can, maskParty } = useRole()
+  // The store's list is the role provider's rule applied to the seeded caseload *plus*
+  // anything filed during the session, so a complaint raised a minute ago is listed here
+  // rather than only reachable through its notification.
+  const { visibleCases, allCases } = useWorkflow()
   const canViewIdentities = can('view:identities')
 
   const [viewKey, setViewKey] = useState('open')
@@ -247,7 +252,7 @@ export function CaseInboxPage() {
           </div>
 
           <div className="border-t border-line px-5 py-3 text-13 text-muted">
-            Showing {rows.length} of {CASES.length} cases
+            Showing {rows.length} of {allCases.length} cases
           </div>
         </div>
       </div>

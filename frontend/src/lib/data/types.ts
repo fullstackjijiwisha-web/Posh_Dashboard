@@ -15,20 +15,20 @@
 export type Role =
   | 'employee'
   | 'hr_spoc'
+  | 'posh_admin'
   | 'presiding_officer'
   | 'ic_member'
   | 'external_member'
-  | 'legal'
   | 'management'
   | 'super_admin'
 
 export const ROLES: Role[] = [
   'employee',
   'hr_spoc',
+  'posh_admin',
   'presiding_officer',
   'ic_member',
   'external_member',
-  'legal',
   'management',
   'super_admin',
 ]
@@ -36,12 +36,14 @@ export const ROLES: Role[] = [
 export const ROLE_LABEL: Record<Role, string> = {
   employee: 'Employee',
   hr_spoc: 'HR SPOC',
+  posh_admin: 'POSH Admin',
   presiding_officer: 'Presiding Officer',
   ic_member: 'Internal Committee member',
   external_member: 'External Member',
-  legal: 'Legal',
   management: 'Management',
-  super_admin: 'Super administrator',
+  // Owner and super administrator are one panel: it provisions POSH Admin accounts
+  // and oversees the caseload, but does not sit on any inquiry.
+  super_admin: 'Company Owner / Super Admin',
 }
 
 /** Capabilities the UI gates on. Kept coarse — one flag per real decision. */
@@ -62,6 +64,14 @@ export type Permission =
   | 'edit:inquiry'
   /** May change system settings and roles. */
   | 'edit:settings'
+  /** May screen intake, open dockets, assign boards and record the employer decision. */
+  | 'workflow:administer'
+  /** May act for the Internal Committee inside an inquiry. */
+  | 'workflow:committee'
+  /** May act as the complainant on their own case. */
+  | 'workflow:complainant'
+  /** May provision POSH Admin accounts. Owner / super administrator only. */
+  | 'admin:provision'
 
 /* ------------------------------------------------------------------ *
  * Parties
@@ -169,6 +179,12 @@ export interface Case {
   /** s.10 — conciliation may be requested by the complainant before inquiry. */
   conciliationRequested: boolean
   summary: string
+  /**
+   * Set only on cases raised through the in-app complaint form during this session.
+   * Lets the complainant's tracker list a case they filed themselves without widening
+   * the employee's view of the seeded caseload.
+   */
+  raisedBy?: Role
 }
 
 /* ------------------------------------------------------------------ *

@@ -11,6 +11,7 @@ import {
   ArrowLeft,
 } from 'lucide-react'
 import { useRole } from '../lib/role-context'
+import { useWorkflow } from '../lib/workflow/store'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { formatDate } from '../lib/format'
 import './ComplaintNew.css'
@@ -133,9 +134,12 @@ function stepValid(step: number, form: FormState): { ok: boolean; hint: string }
 
 export function ComplaintNewPage() {
   const { currentRole, signOut } = useRole()
+  const { submitComplaint } = useWorkflow()
   const navigate = useNavigate()
   const [step, setStep] = useState(1)
   const [submitted, setSubmitted] = useState(false)
+  /** Set on submission — the real id of the case this form just opened. */
+  const [filedCaseId, setFiledCaseId] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>(INITIAL)
   const [dirOpen, setDirOpen] = useState(false)
   const [dirQ, setDirQ] = useState('')
@@ -178,7 +182,10 @@ export function ComplaintNewPage() {
   if (!currentRole) return <Navigate to="/" replace />
 
   const isEmployee = currentRole === 'employee'
-  const caseIdForConfirm = isEmployee ? EMPLOYEE_CASE_ID : NEXT_CASE_ID
+  // Before the workflow layer existed this deep-linked to a fixture so the confirmation
+  // screen had somewhere to go. Now the form opens a real case, so the fixtures are only
+  // the fallback for a submission that somehow produced no id.
+  const caseIdForConfirm = filedCaseId ?? (isEmployee ? EMPLOYEE_CASE_ID : NEXT_CASE_ID)
 
   const goNext = () => {
     if (!canContinue) {
@@ -208,6 +215,20 @@ export function ComplaintNewPage() {
       setShowHint(true)
       return
     }
+    // Opens a real case at step one of the lifecycle. The POSH Admin sees it in their
+    // queue the moment this returns.
+    const id = submitComplaint({
+      narrative: form.narrative,
+      category: form.category,
+      incidentDate: form.incidentDate,
+      location: form.location,
+      department: form.respondentDept,
+      respondentName: form.respondentName,
+      withholdNames: form.withholdNames,
+      conciliationRequested: form.conciliation === 'conciliation',
+      files: form.files.map((f) => ({ name: f.name, sizeKb: f.sizeKb })),
+    })
+    setFiledCaseId(id)
     setSubmitted(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -301,6 +322,7 @@ export function ComplaintNewPage() {
               className="btn btn-secondary"
               onClick={() => {
                 setSubmitted(false)
+                setFiledCaseId(null)
                 setStep(1)
                 setForm(INITIAL)
               }}

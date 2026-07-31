@@ -28,6 +28,10 @@ import { auditForCase } from '../lib/data/audit'
 import { actorName, actorInitials, userById } from '../lib/data/users'
 import { dateNDaysAgo } from '../lib/data/statutory'
 import { useRole } from '../lib/role-context'
+import { useWorkflow } from '../lib/workflow/store'
+import { STAGE_META } from '../lib/workflow/types'
+import { StageTracker, StageSteps, custodian } from '../components/workflow/StageTracker'
+import { ActionPanel } from '../components/workflow/ActionPanel'
 import { formatDate, formatTimestamp } from '../lib/format'
 import { StagePill } from '../components/ui/StagePill'
 import { ComplianceClock } from '../components/ui/ComplianceClock'
@@ -36,7 +40,9 @@ import './CaseWorkspace.css'
 const ICON = { size: 16, strokeWidth: 1.5 } as const
 const ICON_SM = { size: 14, strokeWidth: 1.5 } as const
 
-const TABS = ['Overview', 'Parties', 'Timeline', 'Proceedings', 'Evidence', 'Documents', 'Communications', 'Actions'] as const
+// 'Workflow' leads because it is the only tab that can change the case; the rest are
+// records of what already happened.
+const TABS = ['Workflow', 'Overview', 'Parties', 'Timeline', 'Proceedings', 'Evidence', 'Documents', 'Communications', 'Actions'] as const
 type Tab = (typeof TABS)[number]
 
 const PRIORITY_PILL = {
@@ -140,12 +146,18 @@ function fileIconLabel(name: string): string {
 export function CasesPage() {
   const { caseId } = useParams()
   const { maskParty, canOpenCase } = useRole()
-  const [activeTab, setActiveTab] = useState<Tab>('Overview')
+  const { caseById: caseFromStore, flowFor, committeeById, visibleCases } = useWorkflow()
+  const [activeTab, setActiveTab] = useState<Tab>('Workflow')
   const [copied, setCopied] = useState(false)
   const [selectedEvidence, setSelectedEvidence] = useState<string | null>(null)
 
-  const record = caseById(caseId) ?? caseById(FLAGSHIP_CASE_ID) ?? CASES[0]
-  const allowed = canOpenCase(record.id)
+  // The store's list covers both the seeded caseload and anything raised in-session,
+  // so a complaint filed a moment ago opens in the same workspace as a fixture case.
+  const record = caseFromStore(caseId) ?? caseById(caseId) ?? caseById(FLAGSHIP_CASE_ID) ?? CASES[0]
+  // Session-raised cases are not in the role provider's fixed list, so fall back to the
+  // store's role-filtered list before refusing access.
+  const allowed = canOpenCase(record.id) || visibleCases.some((c) => c.id === record.id)
+  const flow = flowFor(record.id)
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(record.id).catch(() => {})
@@ -189,7 +201,7 @@ export function CasesPage() {
     'u-po': 'Presiding Officer',
     'u-ic': 'Member',
     'u-ext': 'External Member',
-    'u-legal': 'Legal Advisor',
+    'u-legal': 'Member (legal knowledge)',
   }
 
   // Selected evidence for slide-over
@@ -232,6 +244,16 @@ export function CasesPage() {
               </span>
             </div>
           </div>
+
+          {/* ═══ Workflow position ═══ */}
+          {flow && (
+            <div>
+              <div className="cw-section-label">Workflow</div>
+              <div className="card card-pad" style={{ padding: 'var(--space-4)' }}>
+                <StageTracker stage={flow.stage} compact />
+              </div>
+            </div>
+          )}
 
           {/* ═══ Compliance Clock ═══ */}
           <ComplianceClock record={record} />
@@ -297,6 +319,128 @@ export function CasesPage() {
               </button>
             ))}
           </nav>
+
+          {/* ──── Workflow Tab ──── */}
+          {activeTab === 'Workflow' && flow && (
+            <div className="cw-panel rise">
+              <div className="cw-panel-head">
+                <h2 className="cw-panel-title">Case workflow</h2>
+                <span className="meta-pill">{flow.history.length} transitions</span>
+              </div>
+
+              <div className="cw-panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                <StageTracker stage={flow.stage} />
+
+                <div>
+                  <div className="cw-overview-label" style={{ marginBottom: 12 }}>
+                    Your actions
+                  </div>
+                  <ActionPanel caseId={record.id} />
+                </div>
+
+                {/* Standing state that the buttons act on. */}
+                <div className="cw-overview-grid">
+                  <div className="cw-overview-item">
+                    <span className="cw-overview-label">Assigned board</span>
+                    <span className="cw-overview-value">
+                      {committeeById(flow.committeeId)?.name ?? 'Not yet assigned'}
+                    </span>
+                  </div>
+                  <div className="cw-overview-item">
+                    <span className="cw-overview-label">Acceptances on record</span>
+                    <span className="cw-overview-value">
+                      {flow.acceptedBy.length
+                        ? flow.acceptedBy.map(actorName).join(', ')
+                        : flow.declinedBy.length
+                          ? `Declined by ${flow.declinedBy.map(actorName).join(', ')}`
+                          : 'None yet'}
+                    </span>
+                  </div>
+                  <div className="cw-overview-item">
+                    <span className="cw-overview-label">Evidence on record</span>
+                    <span className="cw-overview-value">
+                      {flow.evidence.length} item{flow.evidence.length === 1 ? '' : 's'}
+                      {flow.evidence.some((e) => e.status === 'Pending verification')
+                        ? ` · ${flow.evidence.filter((e) => e.status === 'Pending verification').length} pending`
+                        : ' · all verified'}
+                    </span>
+                  </div>
+                  <div className="cw-overview-item">
+                    <span className="cw-overview-label">Sittings listed</span>
+                    <span className="cw-overview-value">
+                      {flow.hearings.length
+                        ? `${flow.hearings.length} · ${flow.hearings.filter((h) => h.minutes).length} minuted`
+                        : 'None listed'}
+                    </span>
+                  </div>
+                  <div className="cw-overview-item">
+                    <span className="cw-overview-label">Recommendation</span>
+                    <span className="cw-overview-value">
+                      {flow.recommendations.length
+                        ? flow.recommendations[flow.recommendations.length - 1].status
+                        : 'Not yet drafted'}
+                    </span>
+                  </div>
+                  <div className="cw-overview-item">
+                    <span className="cw-overview-label">Currently with</span>
+                    <span className="cw-overview-value">{custodian(flow.stage)}</span>
+                  </div>
+                </div>
+
+                {/* Outstanding request for more material, if any. */}
+                {flow.evidenceRequests.filter((r) => !r.fulfilledAt).map((r) => (
+                  <div key={r.id} className="wf-blocked">
+                    <Clock {...ICON_SM} style={{ color: 'var(--color-warning)', marginTop: 1, flexShrink: 0 }} />
+                    <span>
+                      <strong style={{ fontWeight: 500, color: 'var(--color-primary)' }}>
+                        Further evidence requested
+                      </strong>{' '}
+                      by {r.requestedBy} on {formatTimestamp(r.requestedAt)} — {r.detail}
+                    </span>
+                  </div>
+                ))}
+
+                {/* Final decision, once recorded. */}
+                {flow.finalDecision && (
+                  <div className="cw-summary-block">
+                    <div className="cw-overview-label" style={{ marginBottom: 8 }}>
+                      Final decision — {flow.finalDecision.outcome}
+                    </div>
+                    <p className="cw-summary-text">
+                      {flow.finalDecision.action} Recorded by {actorName(flow.finalDecision.recordedBy)} on{' '}
+                      {formatTimestamp(flow.finalDecision.at)}. {flow.finalDecision.note}
+                    </p>
+                  </div>
+                )}
+
+                <div>
+                  <div className="cw-overview-label" style={{ marginBottom: 12 }}>
+                    Lifecycle
+                  </div>
+                  <StageSteps stage={flow.stage} />
+                </div>
+
+                <div>
+                  <div className="cw-overview-label" style={{ marginBottom: 8 }}>
+                    Workflow history
+                  </div>
+                  <div className="wf-history">
+                    {[...flow.history].reverse().map((h) => (
+                      <div key={h.id} className="wf-history-item">
+                        <span className="wf-history-time">{formatTimestamp(h.at)}</span>
+                        <span>
+                          <span className="wf-history-stage">{STAGE_META[h.stage].label}</span>
+                          <span className="wf-history-meta">
+                            {h.actorName} · {h.actorRole} — {h.remarks}
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ──── Overview Tab ──── */}
           {activeTab === 'Overview' && (

@@ -20,6 +20,36 @@ const TITLES: Record<string, string> = {
   '/audit': 'Audit trail',
   '/settings': 'Settings',
   '/annual-report': 'Annual report',
+  '/workflow': 'Case lifecycle',
+  '/my-complaints': 'Track my complaint',
+  '/committee': 'Committee',
+  '/employees': 'Employees & access',
+  '/hearings': 'Hearings',
+  '/recommendations': 'Recommendations',
+  '/notifications': 'Notifications',
+  '/archive': 'Archive',
+  '/my-documents': 'My documents',
+  '/my-profile': 'My profile',
+  '/help': 'Help centre',
+  '/assigned-cases': 'Assigned cases',
+  '/summary-workspace': 'Summary workspace',
+  '/hearing-calendar': 'Hearing calendar',
+  '/ic-recommendations': 'Recommendation centre',
+  '/evidence-register': 'Evidence register',
+  '/documents-vault': 'Documents vault',
+  '/cause-list': 'Cause list',
+  '/my-tasks': 'My tasks',
+  '/intake-desk': 'Intake desk',
+  '/compliance': 'Employer duties',
+  '/filing-ingest': 'Filing ingest centre',
+  '/statutory-workspace': 'Statutory cases workspace',
+  '/hearings-calendar': 'Hearings calendar',
+  '/analytics': 'Reports and analytics',
+  '/decision-statistics': 'Decision statistics',
+  '/feedback-ratings': 'Feedback ratings',
+  '/resolution-audit': 'Case resolution audit',
+  '/company-settings': 'Company settings',
+  '/command-centre': 'Compliance command centre',
 }
 
 /** 200ms placeholder on route change, so navigation reads as fetching real data. */
@@ -75,6 +105,19 @@ export function AppLayout() {
 
   // Signing out clears the in-memory role; there is nothing to return to.
   if (!currentRole) return <Navigate to="/" replace />
+
+  /**
+   * Management sees the compliance command centre and nothing else.
+   *
+   * Their whole legitimate interest is the organisation's aggregate posture — they hold
+   * `view:analytics` and deliberately not `view:identities`. Every other screen in the
+   * product is either a case, a queue, or an administrative surface, none of which is
+   * theirs. Enforced here rather than by hiding nav entries, so a typed URL is turned
+   * away too.
+   */
+  if (currentRole === 'management' && pathname !== '/dashboard') {
+    return <Navigate to="/dashboard" replace />
+  }
 
   return (
     <div className="app-shell">

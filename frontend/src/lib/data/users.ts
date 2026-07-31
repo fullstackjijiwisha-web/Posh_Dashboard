@@ -21,6 +21,15 @@ export const USERS: User[] = [
     location: 'Bengaluru — Whitefield',
   },
   {
+    id: 'u-padmin',
+    name: 'Anita Sharma',
+    initials: 'AS',
+    email: 'anita.sharma@company.co.in',
+    role: 'posh_admin',
+    designation: 'HR Lead & POSH Administrator',
+    location: 'Mumbai — Andheri East',
+  },
+  {
     id: 'u-po',
     name: 'Priya Sharma',
     initials: 'PS',
@@ -52,8 +61,12 @@ export const USERS: User[] = [
     name: 'Deepak Rao',
     initials: 'DR',
     email: 'deepak.rao@company.co.in',
-    role: 'legal',
-    designation: 'Associate General Counsel',
+    // Sits as an internal member. s.4(2)(b) asks for members drawn from employees
+    // "preferably committed to the cause of women or who have had experience in social
+    // work or have legal knowledge" — counsel on the panel is the third of those, not a
+    // separate seat.
+    role: 'ic_member',
+    designation: 'Associate General Counsel · Internal Committee member',
     location: 'Chennai — Taramani',
   },
   {
@@ -71,13 +84,20 @@ export const USERS: User[] = [
     initials: 'SK',
     email: 'saanya.kapoor@company.co.in',
     role: 'super_admin',
-    designation: 'Compliance Systems Administrator',
+    designation: 'Company Owner & Compliance Systems Administrator',
     location: 'Bengaluru — Whitefield',
   },
 ]
 
+/**
+ * The demo persona for each role — the account the sign-in chips assume.
+ *
+ * First match wins, not last. More than one user can hold a role (the committee has two
+ * internal members), and taking the last would silently hand the persona to whichever
+ * entry happened to be added most recently.
+ */
 export const USER_BY_ROLE: Record<Role, User> = USERS.reduce(
-  (acc, u) => ({ ...acc, [u.role]: u }),
+  (acc, u) => (acc[u.role] ? acc : { ...acc, [u.role]: u }),
   {} as Record<Role, User>,
 )
 

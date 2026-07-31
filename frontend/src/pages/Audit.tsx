@@ -57,21 +57,10 @@ export function AuditPage() {
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
 
-  if (!can('view:audit')) {
-    return (
-      <div className="aud-denied card p-8">
-        <Lock {...ICON} className="text-warning" />
-        <div>
-          <h2 className="text-16">Audit trail restricted</h2>
-          <p className="mt-2 text-13 text-muted">
-            Your role cannot view the immutable audit trail. This attempt is itself logged.
-            Presiding Officer, IC members, External Member, Legal, and Super Admin retain access.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
+  // Every hook in this component runs before the access check below. Returning early
+  // above a hook makes the hook order depend on the signed-in role, so the render after
+  // a role change would read another hook's state — React's rule exists for exactly this
+  // case. Computing the filter for a reader who will not see it is the cheaper mistake.
   const filtered = useMemo(() => {
     const now = Date.now()
     const rangeMs =
@@ -94,6 +83,23 @@ export function AuditPage() {
       return true
     })
   }, [kind, caseFilter, userFilter, actionFilter, range, q])
+
+  if (!can('view:audit')) {
+    return (
+      <div className="aud-denied card p-8">
+        <Lock {...ICON} className="text-warning" />
+        <div>
+          <h2 className="text-16">Audit trail restricted</h2>
+          <p className="mt-2 text-13 text-muted">
+            Your role cannot view the immutable audit trail. This attempt is itself logged.
+            The Presiding Officer, Internal Committee members, the POSH Admin and the Company Owner
+            retain access. The External Member sees their own access record on their profile rather
+            than the organisation&rsquo;s whole trail.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   const total = filtered.length
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
