@@ -20,17 +20,30 @@
   from { stroke-dashoffset: 1000; opacity: 0; }
 }
 
+/* The centre text is bounded by the ring's *inner* circle, not the dial box. Left
+   unconstrained it runs under the stroke on small dials — the label is the widest thing
+   in here and the inner circle is the narrowest part of the dial. 62% of the diameter
+   sits comfortably inside a 5–6px stroke at every size used. */
 .dial-centre {
   position: absolute;
   inset: 0;
   display: grid;
   place-content: center;
+  justify-items: center;
   text-align: center;
   pointer-events: none;
+  padding: 0 4px;
 }
 
+.dial-centre > * {
+  max-width: calc(var(--dial, 132px) * 0.62);
+}
+
+/* Type scales with the dial so one component works at 72px and 148px. Clamped at both
+   ends: below ~13px a figure stops being readable, above 30px it breaks the six-size
+   type scale the rest of the app keeps to. */
 .dial-value {
-  font-size: var(--text-3xl);
+  font-size: clamp(0.8125rem, calc(var(--dial, 132px) * 0.225), 1.875rem);
   font-weight: 500;
   letter-spacing: -0.02em;
   line-height: 1;
@@ -38,11 +51,18 @@
 }
 
 .dial-label {
-  font-size: 10px;
+  font-size: clamp(8px, calc(var(--dial, 132px) * 0.076), 10px);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: var(--color-secondary-text);
   margin-top: 4px;
+  line-height: 1.2;
+  /* A caption that has to wrap is a caption that is too long for its dial — clip it
+     rather than let it push the ring out of round. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 @media (prefers-reduced-motion: reduce) {

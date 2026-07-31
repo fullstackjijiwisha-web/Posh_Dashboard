@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import './Dials.css'
 
 /**
@@ -11,6 +11,17 @@ import './Dials.css'
  */
 
 const TAU = Math.PI * 2
+
+/** Box sizing plus the size variable the stylesheet scales its type against. */
+const dialBox = (size: number): CSSProperties =>
+  ({ width: size, height: size, '--dial': `${size}px` }) as CSSProperties
+
+/**
+ * Below this the inner circle is too narrow to hold a caption at a legible size, so the
+ * caption is dropped rather than shrunk into illegibility or run under the ring. Small
+ * dials are always used inside a tile that already names the figure.
+ */
+const CAPTION_MIN_SIZE = 96
 
 /* ------------------------------------------------------------------ *
  * Statutory clock — the 90-day inquiry window as a dial
@@ -42,7 +53,7 @@ export function ClockDial({
         : 'var(--color-accent)'
 
   return (
-    <div className="dial" style={{ width: size, height: size }}>
+    <div className="dial" style={dialBox(size)} title={`${remaining} ${label}`}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-border)" strokeWidth="6" />
         <circle
@@ -72,7 +83,9 @@ export function ClockDial({
         <div className="dial-value" style={{ color: breached ? 'var(--color-danger)' : undefined }}>
           {breached ? '!' : remaining}
         </div>
-        <div className="dial-label">{breached ? 'past 90 days' : label}</div>
+        {size >= CAPTION_MIN_SIZE && (
+          <div className="dial-label">{breached ? 'past 90 days' : label}</div>
+        )}
       </div>
     </div>
   )
@@ -111,7 +124,7 @@ export function QuorumRing({ tests, size = 132 }: { tests: QuorumTest[]; size?: 
   }
 
   return (
-    <div className="dial" style={{ width: size, height: size }}>
+    <div className="dial" style={dialBox(size)} title={tests.map((t) => `${t.met ? '✓' : '✗'} ${t.label}`).join(' · ')}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
         {tests.map((t, i) => (
           <path
@@ -130,7 +143,9 @@ export function QuorumRing({ tests, size = 132 }: { tests: QuorumTest[]; size?: 
         <div className="dial-value" style={{ color: all ? 'var(--color-accent)' : 'var(--color-warning)' }}>
           {met}/{tests.length}
         </div>
-        <div className="dial-label">{all ? 'quorum met' : 'conditions'}</div>
+        {size >= CAPTION_MIN_SIZE && (
+          <div className="dial-label">{all ? 'quorum met' : 'conditions'}</div>
+        )}
       </div>
     </div>
   )
@@ -179,7 +194,7 @@ export function CoverageRing({
   }[tone]
 
   return (
-    <div className="dial" style={{ width: size, height: size }}>
+    <div className="dial" style={dialBox(size)} title={`${Math.round(value)}% ${caption}`}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-border)" strokeWidth="5" />
         <circle
@@ -197,10 +212,8 @@ export function CoverageRing({
         />
       </svg>
       <div className="dial-centre">
-        <div className="dial-value" style={{ fontSize: 'var(--text-xl)' }}>
-          {Math.round(value)}%
-        </div>
-        <div className="dial-label">{caption}</div>
+        <div className="dial-value">{Math.round(value)}%</div>
+        {size >= CAPTION_MIN_SIZE && <div className="dial-label">{caption}</div>}
       </div>
     </div>
   )
