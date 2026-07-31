@@ -1,0 +1,300 @@
+/* Board's Report disclosure — formal statutory document layout
+   adapted to the Sentinel dark design system. */
+
+.bd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 920px;
+}
+
+.bd-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.bd-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  transition: color var(--ease);
+}
+
+.bd-back:hover {
+  color: var(--color-ink);
+}
+
+.bd-title {
+  font-size: var(--text-20);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.bd-sub {
+  margin-top: 6px;
+  max-width: 56ch;
+  font-size: var(--text-13);
+  color: var(--color-muted);
+  line-height: 1.55;
+}
+
+.bd-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.bd-fy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+
+.bd-fy select {
+  min-width: 140px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: var(--text-sm);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Reference strip */
+.bd-ref {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: rgba(139, 155, 168, 0.08);
+  color: var(--color-muted);
+}
+
+.bd-ref svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--color-accent);
+}
+
+.bd-ref p {
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+/* Formal document panel */
+.bd-doc {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(22, 35, 42, 0.65) 0%, var(--color-surface) 48px);
+  padding: var(--space-8) var(--space-8) var(--space-6);
+}
+
+.bd-doc-head {
+  padding-bottom: var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--space-6);
+}
+
+.bd-doc-mark {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: var(--space-3);
+}
+
+.bd-doc-head h2 {
+  font-size: var(--text-16);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.4;
+  max-width: 42ch;
+}
+
+.bd-doc-head p {
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+.bd-section {
+  padding: var(--space-6) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.bd-section:last-of-type {
+  border-bottom: none;
+}
+
+.bd-section h3 {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  margin-bottom: var(--space-4);
+}
+
+/* Definition table — complaints */
+.bd-def {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.bd-def th,
+.bd-def td {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: baseline;
+  font-size: var(--text-sm);
+}
+
+.bd-def tr:last-child th,
+.bd-def tr:last-child td {
+  border-bottom: none;
+}
+
+.bd-def th {
+  font-weight: 400;
+  color: var(--color-ink);
+  text-align: left;
+  padding-right: var(--space-6);
+  line-height: 1.5;
+}
+
+.bd-def td {
+  width: 88px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  font-size: var(--text-16);
+  font-weight: 500;
+  color: var(--color-ink);
+  letter-spacing: -0.02em;
+}
+
+/* Composition table */
+.bd-comp {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.bd-comp th,
+.bd-comp td {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+}
+
+.bd-comp thead th {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+  border-bottom-color: var(--color-border-strong);
+}
+
+.bd-comp .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+
+.bd-comp tbody td:first-child {
+  color: var(--color-ink);
+}
+
+.bd-comp .bd-total td {
+  font-weight: 500;
+  border-bottom: none;
+  border-top: 1px solid var(--color-border-strong);
+  padding-top: 14px;
+}
+
+/* Compliance checklist */
+.bd-checks {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bd-checks li {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+  color: var(--color-ink);
+}
+
+.bd-checks li:last-child {
+  border-bottom: none;
+}
+
+.bd-checks svg {
+  color: var(--color-accent);
+}
+
+.bd-tick {
+  font-size: var(--text-sm);
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.bd-doc-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding-top: var(--space-6);
+  margin-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.bd-fine {
+  font-size: var(--text-xs);
+  color: var(--color-faint);
+  line-height: 1.55;
+  max-width: 72ch;
+}
+
+@media (max-width: 720px) {
+  .bd-doc {
+    padding: var(--space-5);
+  }
+
+  .bd-def th,
+  .bd-def td {
+    display: block;
+    width: 100%;
+    text-align: left;
+  }
+
+  .bd-def td {
+    padding-top: 0;
+    padding-bottom: 14px;
+    font-size: var(--text-20);
+  }
+}

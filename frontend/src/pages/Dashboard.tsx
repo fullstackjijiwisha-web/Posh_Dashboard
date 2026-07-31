@@ -1,13 +1,4 @@
-import { Link } from 'react-router-dom'
-import {
-  AlertTriangle,
-  CheckCircle2,
-  ClipboardList,
-  Download,
-  ExternalLink,
-  FilePlus2,
-  Users,
-} from 'lucide-react'
+import { CheckCircle2, Download, ExternalLink, Users } from 'lucide-react'
 import {
   Bar,
   BarChart,
@@ -18,53 +9,68 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { useAuth } from '../context/AuthContext'
-import { ACTIVITY, AGEING_DATA, ALERTS, DEPARTMENTS } from '../data/mock'
+import { ACTIVITY, AGEING_DATA, ALERTS, COMPLIANCE, DEPARTMENTS } from '../data/mock'
 import { ANNUAL_REPORT } from '../data/annualReport'
+import { formatNumber, formatPercent, formatTimestamp } from '../lib/format'
 import './Dashboard.css'
 
+const ICON = { size: 16, strokeWidth: 1.5 } as const
+
+/** Severity ramp drawn from the product palette — no second accent colour. */
+const STAGE_FILL = {
+  Acknowledgement: '#94A3B8',
+  Committee: '#1E40AF',
+  Proceedings: '#64748B',
+  Evidence: '#B45309',
+  Report: '#047857',
+}
+
+const AXIS_TICK = { fontSize: 12, fill: '#64748B' }
+const GRID_STROKE = '#E2E8F0'
+
 export function DashboardPage() {
-  const { user } = useAuth()
   const r = ANNUAL_REPORT
+  const maxDept = Math.max(...DEPARTMENTS.map((d) => d.count))
 
   return (
     <div className="dashboard">
       <div className="page-header">
         <div>
-          <h1>Dashboard</h1>
-          <p>Welcome back, {user?.title || 'Admin'} — compliance overview & annual PoSH report</p>
+          <h1>Annual report</h1>
+          <p>Statutory submission format under the PoSH Act 2013 · FY {r.year}</p>
         </div>
-        <div className="period-tabs">
-          {['Today', 'Week', 'Month', 'Quarter'].map((p, i) => (
-            <button key={p} className={`period-tab${i === 1 ? ' active' : ''}`}>
-              {p}
-            </button>
-          ))}
-        </div>
+        <button className="btn btn-primary" type="button">
+          <Download {...ICON} />
+          Export annual report
+        </button>
       </div>
 
       <div className="stat-grid">
         <div className="card stat-card">
-          <div className="label">Open Cases</div>
-          <div className="value">{r.reportedCases === 0 ? 0 : 24}</div>
-          <div className="meta">Active investigations · +3 this week</div>
-        </div>
-        <div className="card stat-card">
-          <div className="label">Reported Cases (Year)</div>
+          <div className="label">Reported cases</div>
           <div className="value">{r.reportedCases}</div>
-          <div className="meta">Annual report · {r.year}</div>
+          <div className="meta">FY {r.year}</div>
         </div>
         <div className="card stat-card">
-          <div className="label">Employees Covered</div>
-          <div className="value">{r.employees.total}</div>
+          <div className="label">Employees covered</div>
+          <div className="value">{formatNumber(COMPLIANCE.totalEmployees)}</div>
           <div className="meta">
-            {r.employees.male}M · {r.employees.female}F · {r.employees.others} Other
+            {r.employees.male} male · {r.employees.female} female · {r.employees.others} other declared
           </div>
         </div>
         <div className="card stat-card">
-          <div className="label">Awareness Workshops</div>
+          <div className="label">Awareness workshops</div>
           <div className="value">{r.awarenessWorkshops.count}</div>
-          <div className="meta">{r.awarenessWorkshops.mode} · {r.awarenessWorkshops.audience}</div>
+          <div className="meta">
+            {r.awarenessWorkshops.mode} · {r.awarenessWorkshops.audience}
+          </div>
+        </div>
+        <div className="card stat-card">
+          <div className="label">Training coverage</div>
+          <div className="value">{formatPercent(COMPLIANCE.trainingCoveragePct)}</div>
+          <div className="meta">
+            {formatNumber(COMPLIANCE.trainedEmployees)} of {formatNumber(COMPLIANCE.totalEmployees)} trained
+          </div>
         </div>
       </div>
 
@@ -72,21 +78,17 @@ export function DashboardPage() {
       <section className="card annual-panel">
         <div className="annual-head">
           <div>
-            <div className="eyebrow">PoSH Act 2013 · Workplace Submission</div>
-            <h2>Annual Report Submission Format</h2>
-            <p>All statutory fields for district / workplace annual reporting · FY {r.year}</p>
+            <div className="eyebrow">PoSH Act 2013 · workplace submission</div>
+            <h2>Annual report submission format</h2>
+            <p>All statutory fields for district and workplace annual reporting</p>
           </div>
-          <button className="btn btn-primary" type="button">
-            <Download size={16} />
-            Export Annual Report
-          </button>
         </div>
 
         <div className="annual-grid">
           <div className="annual-block">
             <h3>1. Status of functional Internal Committee</h3>
-            <div className={`ic-status ${r.functionalIc ? 'yes' : 'no'}`}>
-              <CheckCircle2 size={18} />
+            <div className="ic-status">
+              <CheckCircle2 {...ICON} style={{ marginTop: 2, flexShrink: 0 }} />
               <div>
                 <strong>{r.functionalIc ? 'Yes' : 'No'}</strong>
                 <p>{r.functionalIcNote}</p>
@@ -94,26 +96,37 @@ export function DashboardPage() {
             </div>
           </div>
 
+          <div className="annual-block">
+            <h3>4. Units where Internal Committee details are displayed</h3>
+            <p className="answer">{r.displayLocations}</p>
+          </div>
+
           <div className="annual-block span-2">
             <h3>2. Details of Internal Committee members</h3>
-            <p className="hint">Name, designation, and mobile numbers of all members including external member</p>
+            <p className="hint">Name, designation, and contact number of every member</p>
             <div className="table-wrap">
               <table className="data">
+                <colgroup>
+                  <col style={{ width: 72 }} />
+                  <col style={{ width: 240 }} />
+                  <col style={{ width: 200 }} />
+                  <col style={{ width: 180 }} />
+                </colgroup>
                 <thead>
                   <tr>
-                    <th>S. No.</th>
+                    <th className="num">S. no.</th>
                     <th>Name</th>
                     <th>Designation</th>
-                    <th>Contact Number</th>
+                    <th className="num">Contact number</th>
                   </tr>
                 </thead>
                 <tbody>
                   {r.icMembers.map((m) => (
                     <tr key={m.sno}>
-                      <td>{m.sno}.</td>
-                      <td>{m.name}</td>
+                      <td className="num">{m.sno}</td>
+                      <td title={m.name}>{m.name}</td>
                       <td>{m.designation}</td>
-                      <td>{m.contact}</td>
+                      <td className="num mono">{m.contact}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -122,27 +135,34 @@ export function DashboardPage() {
           </div>
 
           <div className="annual-block span-2">
-            <h3>3. Details of External member</h3>
-            <p className="hint">Name, organization, work experience in the field of POSH Laws</p>
+            <h3>3. Details of External Member</h3>
+            <p className="hint">Name, organisation, and experience in the field of PoSH law</p>
             <div className="table-wrap">
               <table className="data">
+                <colgroup>
+                  <col style={{ width: 72 }} />
+                  <col style={{ width: 220 }} />
+                  <col style={{ width: 220 }} />
+                  <col style={{ width: 140 }} />
+                  <col style={{ width: 180 }} />
+                </colgroup>
                 <thead>
                   <tr>
-                    <th>S. No.</th>
+                    <th className="num">S. no.</th>
                     <th>Name</th>
-                    <th>Designation / Organization</th>
-                    <th>Experience (Years)</th>
-                    <th>Contact Number</th>
+                    <th>Organisation</th>
+                    <th className="num">Experience</th>
+                    <th className="num">Contact number</th>
                   </tr>
                 </thead>
                 <tbody>
                   {r.externalMembers.map((m) => (
                     <tr key={m.sno}>
-                      <td>{m.sno}.</td>
-                      <td>{m.name}</td>
+                      <td className="num">{m.sno}</td>
+                      <td title={m.name}>{m.name}</td>
                       <td>{m.organization}</td>
-                      <td>{m.experienceYears} years</td>
-                      <td>{m.contact}</td>
+                      <td className="num">{m.experienceYears} years</td>
+                      <td className="num mono">{m.contact}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -151,21 +171,16 @@ export function DashboardPage() {
           </div>
 
           <div className="annual-block">
-            <h3>4. Units where IC details are displayed</h3>
-            <p className="answer">{r.displayLocations}</p>
-          </div>
-
-          <div className="annual-block">
-            <h3>5. Awareness workshops (employees)</h3>
+            <h3>5. Awareness workshops for employees</h3>
             <p className="answer">{r.awarenessWorkshops.notes}</p>
             <a className="link-out" href={r.awarenessWorkshops.url} target="_blank" rel="noreferrer">
-              <ExternalLink size={14} />
+              <ExternalLink {...ICON} />
               {r.awarenessWorkshops.url}
             </a>
           </div>
 
           <div className="annual-block">
-            <h3>6. Sensitization workshops (IC members)</h3>
+            <h3>6. Sensitisation workshops for Internal Committee members</h3>
             <p className="answer">{r.sensitizationWorkshops.notes}</p>
             <div className="mini-stat">{r.sensitizationWorkshops.count} sessions this year</div>
           </div>
@@ -183,7 +198,7 @@ export function DashboardPage() {
           <div className="annual-block span-2">
             <h3>9. Resource person for PoSH awareness workshops</h3>
             <div className="resource-card">
-              <Users size={18} />
+              <Users {...ICON} style={{ marginTop: 2, flexShrink: 0, color: 'var(--color-secondary-text)' }} />
               <div>
                 <strong>{r.resourcePerson.name}</strong>
                 <p>{r.resourcePerson.credentials}</p>
@@ -212,39 +227,39 @@ export function DashboardPage() {
                 <strong>{r.employees.female}</strong>
               </div>
               <div>
-                <span>Others</span>
+                <span>Other</span>
                 <strong>{r.employees.others}</strong>
               </div>
             </div>
           </div>
 
           <div className="annual-block">
-            <h3>12. Total reported cases in a year</h3>
-            <p className="answer big">{r.reportedCases === 0 ? 'None' : r.reportedCases}</p>
+            <h3>12. Total reported cases in the year</h3>
+            <p className="answer big">{r.reportedCases}</p>
           </div>
 
           <div className="annual-block">
-            <h3>13. Confidentiality & sensitivity measures</h3>
+            <h3>13. Confidentiality and sensitivity measures</h3>
             <p className="answer">{r.confidentialityMeasures}</p>
           </div>
 
           <div className="annual-block">
-            <h3>14. Status of reported cases (inquiry)</h3>
+            <h3>14. Status of reported cases</h3>
             <p className="answer">{r.inquiryStatus}</p>
           </div>
 
           <div className="annual-block">
-            <h3>15. Pending cases / reasons of pendency</h3>
+            <h3>15. Pending cases and reasons for pendency</h3>
             <p className="answer">{r.pendingCases}</p>
           </div>
 
           <div className="annual-block span-2">
-            <h3>16. Initiatives planned for the upcoming year</h3>
+            <h3>16. Initiatives planned for the coming year</h3>
             <p className="answer">{r.upcomingInitiatives}</p>
           </div>
 
           <div className="annual-block span-2">
-            <h3>17. Any other information regarding PoSH Act</h3>
+            <h3>17. Any other information</h3>
             <p className="answer">{r.otherInfo}</p>
           </div>
         </div>
@@ -256,64 +271,40 @@ export function DashboardPage() {
         <div className="card score-card">
           <div className="score-head">
             <div>
-              <h3>Compliance Score</h3>
-              <p>Organization-wide POSH compliance health</p>
+              <h3>Compliance score</h3>
+              <p>Organisation-wide PoSH compliance health</p>
             </div>
-            <span className="badge badge-medium">Needs Attention</span>
+            <span className="badge badge-medium">Needs attention</span>
           </div>
-          <div className="score-ring">
-            <div className="score-num">78%</div>
-            <div className="score-label">Overall Score</div>
-          </div>
-          <div className="score-bars">
-            {[
-              ['Policy Adherence', 92],
-              ['Training Coverage', 82],
-              ['Case Timeliness', 91],
-              ['Documentation', 68],
-            ].map(([label, val]) => (
-              <div key={label as string} className="score-row">
+          <div className="score-figure">{formatPercent(COMPLIANCE.score)}</div>
+          <div>
+            {COMPLIANCE.breakdown.map(({ label, value }) => (
+              <div key={label} className="score-row">
                 <div className="score-row-top">
                   <span>{label}</span>
-                  <strong>{val}%</strong>
+                  <strong>{formatPercent(value)}</strong>
                 </div>
                 <div className="bar-track">
-                  <div className="bar-fill" style={{ width: `${val}%` }} />
+                  <div className="bar-fill" style={{ width: `${value}%` }} />
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="card quick-card">
-          <h3>Quick Actions</h3>
-          <div className="quick-grid">
-            <Link to="/complaints" className="quick-item">
-              <FilePlus2 size={18} />
-              New Complaint
-            </Link>
-            <Link to="/cases" className="quick-item">
-              <ClipboardList size={18} />
-              View Cases
-            </Link>
-            <Link to="/actions" className="quick-item">
-              <AlertTriangle size={18} />
-              Action Items
-            </Link>
-            <Link to="/settings" className="quick-item">
-              <Users size={18} />
-              Team Overview
-            </Link>
-          </div>
-
-          <h3 className="mt">Training Coverage</h3>
-          <div className="training">
-            <div className="training-pct">78%</div>
-            <div>
-              <div className="bar-track lg">
-                <div className="bar-fill" style={{ width: '78%' }} />
-              </div>
-              <p>78 of 100 employees trained</p>
+        <div className="card side-stack-card">
+          <div style={{ padding: 0 }}>
+            <h3 style={{ marginBottom: 12 }}>Cases by department</h3>
+            <div className="dept-list">
+              {DEPARTMENTS.map((d) => (
+                <div key={d.name} className="dept-row">
+                  <span>{d.name}</span>
+                  <div className="bar-track">
+                    <div className="bar-fill" style={{ width: `${(d.count / maxDept) * 100}%` }} />
+                  </div>
+                  <strong>{d.count}</strong>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -323,65 +314,46 @@ export function DashboardPage() {
         <div className="card chart-card">
           <div className="chart-head">
             <div>
-              <h3>Case Ageing by Stage</h3>
+              <h3>Case ageing by stage</h3>
               <p>Monthly distribution across workflow stages</p>
             </div>
-            <span className="meta-pill">82 cases tracked</span>
           </div>
-          <div className="chart-wrap">
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={AGEING_DATA}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e8e4da" />
-                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="Acknowledgement" fill="#5b8a80" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Committee" fill="#1e3a5f" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Proceedings" fill="#c08b2c" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Evidence" fill="#3a7ec0" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Report" fill="#3d8b5e" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <ResponsiveContainer width="100%" height={264}>
+            <BarChart data={AGEING_DATA} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+              <CartesianGrid vertical={false} stroke={GRID_STROKE} />
+              <XAxis dataKey="month" tick={AXIS_TICK} tickLine={false} axisLine={{ stroke: GRID_STROKE }} />
+              <YAxis tick={AXIS_TICK} tickLine={false} axisLine={false} allowDecimals={false} />
+              <Tooltip cursor={{ fill: 'rgba(15,23,42,0.04)' }} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              {Object.entries(STAGE_FILL).map(([key, fill]) => (
+                <Bar key={key} dataKey={key} stackId="stage" fill={fill} isAnimationActive={false} />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
         </div>
 
         <div className="side-stack">
           <div className="card">
-            <h3>Recent Alerts</h3>
+            <h3>Alerts</h3>
             <ul className="list">
               {ALERTS.map((a) => (
                 <li key={a.text}>
                   <span>{a.text}</span>
-                  <small>{a.time}</small>
+                  <small>{formatTimestamp(a.at)}</small>
                 </li>
               ))}
             </ul>
           </div>
           <div className="card">
-            <h3>Recent Activity</h3>
+            <h3>Recent activity</h3>
             <ul className="list">
               {ACTIVITY.map((a) => (
                 <li key={a.text}>
                   <span>{a.text}</span>
-                  <small>{a.time}</small>
+                  <small>{formatTimestamp(a.at)}</small>
                 </li>
               ))}
             </ul>
-          </div>
-          <div className="card">
-            <h3>Cases by Department</h3>
-            <div className="dept-list">
-              {DEPARTMENTS.map((d) => (
-                <div key={d.name} className="dept-row">
-                  <span>{d.name}</span>
-                  <div className="bar-track">
-                    <div className="bar-fill" style={{ width: `${(d.count / 6) * 100}%` }} />
-                  </div>
-                  <strong>{d.count}</strong>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       </div>

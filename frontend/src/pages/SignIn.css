@@ -1,0 +1,199 @@
+.signin {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  background: var(--color-background);
+}
+
+/* Left panel ------------------------------------------------------------ */
+
+.signin-panel {
+  background: var(--color-chrome);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: var(--space-12);
+  position: relative;
+  overflow: hidden;
+}
+
+/* A single, very low-contrast grid. Structure, not decoration. */
+.signin-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(16, 185, 129, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.035) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at 20% 30%, #000 0%, transparent 70%);
+}
+
+.signin-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  position: relative;
+  z-index: 1;
+}
+
+.signin-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-lg);
+  background: var(--color-accent-tint);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--color-accent);
+  display: grid;
+  place-items: center;
+}
+
+.signin-wordmark {
+  font-size: var(--text-lg);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--color-primary);
+}
+
+.signin-copy {
+  position: relative;
+  z-index: 1;
+  max-width: 34ch;
+}
+
+.signin-copy h1 {
+  font-size: var(--text-xl);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--color-primary);
+  line-height: 1.35;
+}
+
+.signin-copy p {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-secondary-text);
+  line-height: 1.6;
+}
+
+.signin-foot {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--color-tertiary-text);
+}
+
+/* Right panel ----------------------------------------------------------- */
+
+.signin-form-wrap {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: var(--space-8);
+}
+
+.signin-card {
+  width: 100%;
+  max-width: 400px;
+}
+
+.signin-card h2 {
+  font-size: var(--text-lg);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.signin-card > p {
+  color: var(--color-secondary-text);
+  font-size: var(--text-sm);
+  margin-top: var(--space-1);
+  margin-bottom: var(--space-6);
+}
+
+.field {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--color-secondary-text);
+  margin-bottom: var(--space-4);
+}
+
+.field .input {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-2);
+  background: var(--color-surface);
+}
+
+.demo-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-6) 0 var(--space-4);
+}
+
+.demo-divider::before,
+.demo-divider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--color-border);
+}
+
+.demo-divider span {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-tertiary-text);
+}
+
+.role-chips {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.role-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  text-align: left;
+  min-width: 0;
+  transition: background-color var(--ease), border-color var(--ease);
+}
+
+.role-chip:hover {
+  background: var(--color-raised);
+  border-color: var(--color-accent);
+}
+
+.role-chip-name {
+  font-size: var(--text-sm);
+  color: var(--color-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.signin-note {
+  margin-top: var(--space-6);
+  font-size: var(--text-xs);
+  color: var(--color-tertiary-text);
+  max-width: 400px;
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .signin { grid-template-columns: 1fr; }
+  .signin-panel { padding: var(--space-6); gap: var(--space-6); }
+  .role-chips { grid-template-columns: 1fr; }
+}

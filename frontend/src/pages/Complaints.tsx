@@ -2,6 +2,10 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { COMPLAINTS, type ComplaintStatus } from '../data/mock'
+import { useRole } from '../context/RoleContext'
+import { formatDate } from '../lib/format'
+
+const ICON = { size: 16, strokeWidth: 1.5 } as const
 
 const statusClass: Record<ComplaintStatus, string> = {
   Open: 'badge-open',
@@ -11,8 +15,20 @@ const statusClass: Record<ComplaintStatus, string> = {
   Pending: 'badge-medium',
 }
 
+const COLUMNS = [
+  { label: 'Complaint', width: 300, align: 'left' },
+  { label: 'Status', width: 116, align: 'left' },
+  { label: 'Complainant', width: 160, align: 'left' },
+  { label: 'Respondent', width: 160, align: 'left' },
+  { label: 'Assignee', width: 150, align: 'left' },
+  { label: 'Filed', width: 116, align: 'right' },
+  { label: 'Stage', width: 140, align: 'left' },
+] as const
+
 export function ComplaintsPage() {
   const [status, setStatus] = useState('All')
+  const { maskParty } = useRole()
+
   const filtered = useMemo(
     () => (status === 'All' ? COMPLAINTS : COMPLAINTS.filter((c) => c.status === status)),
     [status],
@@ -30,12 +46,12 @@ export function ComplaintsPage() {
         <div>
           <h1>Complaints</h1>
           <p>
-            {counts.Open} Open · {counts['In Progress']} In Progress · {counts.Closed} Closed
+            {counts.Open} open · {counts['In Progress']} in progress · {counts.Closed} closed
           </p>
         </div>
         <button className="btn btn-primary" type="button">
-          <Plus size={16} />
-          New Complaint
+          <Plus {...ICON} />
+          Register complaint
         </button>
       </div>
 
@@ -53,35 +69,46 @@ export function ComplaintsPage() {
       </div>
 
       <div className="card table-wrap">
-        <table className="data">
+        <table className="data" style={{ minWidth: 1142 }}>
+          <colgroup>
+            {COLUMNS.map((c) => (
+              <col key={c.label} style={{ width: c.width }} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
-              <th>Complaint</th>
-              <th>Status</th>
-              <th>Complainant</th>
-              <th>Assignee</th>
-              <th>Filed</th>
-              <th>Stage</th>
+              {COLUMNS.map((c) => (
+                <th key={c.label} scope="col" className={c.align === 'right' ? 'num' : undefined}>
+                  {c.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {filtered.map((c) => (
-              <tr key={c.id}>
-                <td>
-                  <Link to="/cases">
-                    <strong>{c.id}</strong>
-                    <div style={{ color: 'var(--color-secondary-text)', marginTop: 2 }}>{c.title}</div>
-                  </Link>
-                </td>
-                <td>
-                  <span className={`badge ${statusClass[c.status]}`}>{c.status}</span>
-                </td>
-                <td>{c.complainant}</td>
-                <td>{c.assignee}</td>
-                <td>{c.filed}</td>
-                <td>{c.stage}</td>
-              </tr>
-            ))}
+            {filtered.map((c) => {
+              const complainant = maskParty(c.complainant, 'complainant')
+              const respondent = maskParty(c.respondent, 'respondent')
+              return (
+                <tr key={c.id}>
+                  <td title={c.title}>
+                    <Link to={`/cases/${c.id}`} className="mono text-accent hover:underline">
+                      {c.id}
+                    </Link>
+                    <div className="truncate-cell" style={{ color: 'var(--color-secondary-text)' }}>
+                      {c.title}
+                    </div>
+                  </td>
+                  <td>
+                    <span className={`badge ${statusClass[c.status]}`}>{c.status}</span>
+                  </td>
+                  <td title={complainant}>{complainant}</td>
+                  <td title={respondent}>{respondent}</td>
+                  <td title={c.assignee}>{c.assignee}</td>
+                  <td className="num">{formatDate(c.filed)}</td>
+                  <td>{c.stage}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

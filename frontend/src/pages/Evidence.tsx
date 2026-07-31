@@ -1,38 +1,64 @@
 import { Plus } from 'lucide-react'
-import { EVIDENCE } from '../data/mock'
+import { EVIDENCE, type EvidenceItem } from '../data/mock'
+import { formatDate } from '../lib/format'
+
+const ICON = { size: 16, strokeWidth: 1.5 } as const
+
+const badgeFor = (s: EvidenceItem['status']) =>
+  s === 'In custody' ? 'badge-open' : s === 'Released' ? 'badge-medium' : 'badge-closed'
+
+const COLUMNS = [
+  { label: 'Exhibit', width: 116, align: 'left' },
+  { label: 'Description', width: 420, align: 'left' },
+  { label: 'Source', width: 180, align: 'left' },
+  { label: 'Received', width: 132, align: 'right' },
+  { label: 'Custody status', width: 140, align: 'left' },
+] as const
 
 export function EvidencePage() {
-  const badge = (s: string) =>
-    s === 'In Custody' ? 'badge-open' : s === 'Released' ? 'badge-medium' : 'badge-closed'
-
   return (
     <div>
       <div className="page-header">
         <div>
-          <h1>Evidence & Chain of Custody</h1>
-          <p>Evidence index with source, date, and custody status</p>
+          <h1>Evidence and chain of custody</h1>
+          <p>Exhibit index with source, receipt date, and custody status</p>
         </div>
         <button className="btn btn-primary" type="button">
-          <Plus size={16} />
-          Add Evidence
+          <Plus {...ICON} />
+          Add evidence
         </button>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {EVIDENCE.map((e) => (
-          <div key={e.id} className="card" style={{ padding: '1rem 1.15rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-              <div>
-                <strong>{e.id}</strong>
-                <p style={{ marginTop: 4 }}>{e.description}</p>
-                <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-secondary-text)' }}>
-                  {e.source} | {e.date}
-                </div>
-              </div>
-              <span className={`badge ${badge(e.status)}`}>{e.status}</span>
-            </div>
-          </div>
-        ))}
+      <div className="card table-wrap">
+        <table className="data" style={{ minWidth: 988 }}>
+          <colgroup>
+            {COLUMNS.map((c) => (
+              <col key={c.label} style={{ width: c.width }} />
+            ))}
+          </colgroup>
+          <thead>
+            <tr>
+              {COLUMNS.map((c) => (
+                <th key={c.label} scope="col" className={c.align === 'right' ? 'num' : undefined}>
+                  {c.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {EVIDENCE.map((e) => (
+              <tr key={e.id}>
+                <td className="mono">{e.id}</td>
+                <td title={e.description}>{e.description}</td>
+                <td>{e.source}</td>
+                <td className="num">{formatDate(e.received)}</td>
+                <td>
+                  <span className={`badge ${badgeFor(e.status)}`}>{e.status}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )

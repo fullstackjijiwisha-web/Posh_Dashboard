@@ -1,22 +1,87 @@
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
-import { ROLES, WORKFLOW_STAGES } from '../data/mock'
+import { Check, Minus, Plus, Shield } from 'lucide-react'
+import { WORKFLOW_STAGES } from '../data/mock'
+import { ROLE_LABEL, ROLES, type Permission, type Role } from '../lib/data/types'
+import { useRole } from '../lib/role-context'
 
+const ICON = { size: 16, strokeWidth: 1.5 } as const
 const TABS = ['Roles', 'Workflow', 'Retention', 'Audit'] as const
+
+const PERM_LABEL: Record<Permission, string> = {
+  'view:identities': 'See real party names',
+  'view:all_cases': 'See all cases',
+  'view:inquiry': 'Read inquiry content',
+  'view:audit': 'Audit trail',
+  'view:analytics': 'Dashboards & annual report',
+  'edit:intake': 'Register / edit intake',
+  'edit:inquiry': 'Record findings & stages',
+  'edit:settings': 'System settings',
+}
+
+const MATRIX: Record<Role, Permission[]> = {
+  employee: ['view:inquiry'],
+  hr_spoc: ['view:identities', 'view:all_cases', 'edit:intake'],
+  presiding_officer: [
+    'view:identities',
+    'view:all_cases',
+    'view:inquiry',
+    'view:audit',
+    'view:analytics',
+    'edit:intake',
+    'edit:inquiry',
+  ],
+  ic_member: ['view:identities', 'view:all_cases', 'view:inquiry', 'view:audit', 'edit:inquiry'],
+  external_member: ['view:identities', 'view:all_cases', 'view:inquiry', 'view:audit'],
+  legal: ['view:identities', 'view:all_cases', 'view:audit', 'view:analytics'],
+  management: ['view:all_cases', 'view:analytics'],
+  super_admin: [
+    'view:identities',
+    'view:all_cases',
+    'view:inquiry',
+    'view:audit',
+    'view:analytics',
+    'edit:intake',
+    'edit:inquiry',
+    'edit:settings',
+  ],
+}
+
+const NOTES: Record<Role, string> = {
+  employee: 'Own case only. Never sees respondent identity.',
+  hr_spoc: 'Intake fields only — cannot open inquiry content.',
+  presiding_officer: 'Full access on assigned cases; drives the inquiry.',
+  ic_member: 'Full inquiry access on assigned cases.',
+  external_member: 'Inquiry access; conflict declarations required.',
+  legal: 'Closed / archived cases + audit. Read-only.',
+  management: 'Aggregates only. Identities always masked (s.16).',
+  super_admin: 'Full platform control. Every action is logged.',
+}
 
 export function SettingsPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]>('Roles')
+  const { can } = useRole()
+
+  if (!can('edit:settings') && !can('view:analytics')) {
+    return (
+      <div className="card p-8">
+        <h2 className="text-16">Settings restricted</h2>
+        <p className="mt-2 text-13 text-muted">Your role cannot change system configuration.</p>
+      </div>
+    )
+  }
+
+  const perms = Object.keys(PERM_LABEL) as Permission[]
 
   return (
-    <div>
-      <div className="page-header">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1>Admin Settings</h1>
-          <p>Configure system-wide settings, permissions, and compliance rules</p>
+          <h1 className="text-20 tracking-[-0.02em]">Settings</h1>
+          <p className="mt-1 text-13 text-muted">Need-to-know access · PoSH Act s.16 confidentiality</p>
         </div>
       </div>
 
-      <div className="filters">
+      <div className="flex flex-wrap gap-2">
         {TABS.map((t) => (
           <button
             key={t}
@@ -30,79 +95,109 @@ export function SettingsPage() {
       </div>
 
       {tab === 'Roles' && (
-        <div className="card" style={{ padding: '1.25rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-            <div>
-              <h3>Roles & Permissions</h3>
-              <p style={{ color: 'var(--color-secondary-text)', fontSize: 13 }}>
-                Manage role-based access control across the platform
-              </p>
+        <section className="card overflow-hidden">
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-5 py-4">
+            <div className="flex items-start gap-3">
+              <div
+                className="mt-0.5 grid h-9 w-9 place-items-center rounded-md"
+                style={{ background: 'rgba(16,185,129,0.14)', color: '#6ee7b7' }}
+              >
+                <Shield {...ICON} />
+              </div>
+              <div>
+                <h3 className="text-16 tracking-[-0.02em]">Who can see what</h3>
+                <p className="mt-1 text-13 text-muted">
+                  Live permission matrix — the demo switches these when you change role at sign-in
+                </p>
+              </div>
             </div>
             <button className="btn btn-primary" type="button">
-              <Plus size={16} />
-              Add Role
+              <Plus {...ICON} />
+              Add role
             </button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
-            {ROLES.map((r) => (
-              <div key={r.name} style={{ border: '1px solid var(--color-border)', borderRadius: 12, padding: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <strong>{r.name}</strong>
-                  <span className="meta-pill">{r.users} users</span>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {r.perms.map((p) => (
-                    <span key={p} className="badge badge-low">
-                      {p}
-                    </span>
+
+          <div className="table-wrap" style={{ maxHeight: 'none' }}>
+            <table className="data" style={{ minWidth: 980 }}>
+              <thead>
+                <tr>
+                  <th>Role</th>
+                  {perms.map((p) => (
+                    <th key={p} className="text-center" style={{ fontSize: 10, whiteSpace: 'normal', maxWidth: 88 }}>
+                      {PERM_LABEL[p]}
+                    </th>
                   ))}
-                </div>
-              </div>
-            ))}
+                </tr>
+              </thead>
+              <tbody>
+                {ROLES.map((role) => (
+                  <tr key={role}>
+                    <td>
+                      <div className="font-medium">{ROLE_LABEL[role]}</div>
+                      <div className="text-12 text-faint" style={{ maxWidth: 220 }}>
+                        {NOTES[role]}
+                      </div>
+                    </td>
+                    {perms.map((p) => {
+                      const on = MATRIX[role].includes(p)
+                      return (
+                        <td key={p} className="text-center">
+                          {on ? (
+                            <Check size={14} strokeWidth={2} className="inline text-accent" />
+                          ) : (
+                            <Minus size={14} strokeWidth={2} className="inline text-faint" />
+                          )}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </section>
       )}
 
       {tab === 'Workflow' && (
-        <div className="card" style={{ padding: '1.25rem' }}>
-          <h3 style={{ marginBottom: 12 }}>Configurable Lifecycle</h3>
-          <p style={{ color: 'var(--color-secondary-text)', marginBottom: 16, fontSize: 13 }}>
-            Complaint → Acknowledgement → Committee → Proceedings → Evidence → Report → Management Action → Closure →
-            Archive
-          </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <section className="card p-5">
+          <h3 className="mb-2 text-16 tracking-[-0.02em]">Configurable lifecycle</h3>
+          <p className="mb-4 text-13 text-muted">Stages a case moves through, from intake to archive.</p>
+          <div className="flex flex-wrap gap-2">
             {WORKFLOW_STAGES.map((s) => (
-              <span key={s} className="badge badge-open" style={{ padding: '0.45rem 0.75rem' }}>
+              <span key={s} className="badge badge-open" style={{ padding: '6px 12px' }}>
                 {s}
               </span>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       {tab === 'Retention' && (
-        <div className="card" style={{ padding: '1.25rem' }}>
-          <h3>Archive & Retention</h3>
-          <p style={{ color: 'var(--color-secondary-text)', marginTop: 8, fontSize: 14 }}>
+        <section className="card p-5">
+          <h3 className="text-16 tracking-[-0.02em]">Archive and retention</h3>
+          <p className="mt-2 text-14 text-muted">
             Retention, secure deletion, retrieval, and handover policies for closed cases.
           </p>
-          <ul style={{ marginTop: 16, paddingLeft: 18, lineHeight: 1.8, fontSize: 14 }}>
+          <ul className="mt-4 flex flex-col gap-2 text-14">
             <li>Closed cases retained for 7 years</li>
-            <li>Secure deletion with dual approval</li>
-            <li>Retrieval logged in audit trail</li>
-            <li>Handover pack for legal / district authority</li>
+            <li>Secure deletion requires dual approval</li>
+            <li>Retrieval is recorded in the audit trail</li>
+            <li>Handover pack available for the district authority</li>
           </ul>
-        </div>
+        </section>
       )}
 
       {tab === 'Audit' && (
-        <div className="card" style={{ padding: '1.25rem' }}>
-          <h3>Audit Settings</h3>
-          <p style={{ color: 'var(--color-secondary-text)', marginTop: 8, fontSize: 14 }}>
-            All access is logged. MFA required for admin roles. No AI / transcription / model training without written
-            approval.
+        <section className="card p-5">
+          <h3 className="text-16 tracking-[-0.02em]">Dual audit architecture</h3>
+          <p className="mt-2 text-14 text-muted">
+            <strong className="text-ink">PoSH audit</strong> records case and inquiry events
+            (views of evidence, documents, hearings, stage changes).{' '}
+            <strong className="text-ink">Technical audit</strong> records logins, MFA, exports,
+            and access denials. Both are append-only — even administrators cannot edit or delete
+            rows. No AI, transcription, or model training without written approval.
           </p>
-        </div>
+        </section>
       )}
     </div>
   )
