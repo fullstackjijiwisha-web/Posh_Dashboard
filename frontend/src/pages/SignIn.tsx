@@ -16,14 +16,12 @@ export function SignInPage() {
   useDocumentTitle('Sign in')
 
   if (currentRole) {
-    return <Navigate to={currentRole === 'employee' ? '/complaint/new' : '/dashboard'} replace />
+    return <Navigate to="/dashboard" replace />
   }
 
   const enter = (role: Role) => {
     setRole(role)
-    // Ordinary employees land on the confidential complaint channel —
-    // the only screen they need for first contact.
-    navigate(role === 'employee' ? '/complaint/new' : '/dashboard')
+    navigate('/dashboard')
   }
 
   // The prototype does not validate. Signing in lands on the Presiding Officer view,
