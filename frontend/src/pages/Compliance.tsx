@@ -217,9 +217,16 @@ export function CompliancePage() {
             <div className="ep-card-head">
               <span className="ep-card-title">Duty coverage</span>
             </div>
-            <div className="ep-card-body" style={{ display: 'flex', gap: 'var(--space-5)', alignItems: 'center', flexWrap: 'wrap' }}>
-              <CoverageRing value={score} caption="fully evidenced" tone={score === 100 ? 'accent' : 'warning'} />
-              <div style={{ minWidth: 0, flex: 1 }}>
+            <div
+              className="ep-card-body"
+              style={{ display: 'flex', gap: 'var(--space-5)', alignItems: 'center', flexWrap: 'wrap' }}
+            >
+              <CoverageRing
+                value={score}
+                caption="Fully evidenced"
+                tone={score === 100 ? 'accent' : 'warning'}
+              />
+              <div style={{ minWidth: 140, flex: 1 }}>
                 <p className="text-12 text-muted" style={{ lineHeight: 1.7 }}>
                   A partial duty is not a breach — it is a duty whose evidence would not survive
                   being asked for. Closing those is cheaper before an inspection than during one.

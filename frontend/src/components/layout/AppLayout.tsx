@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Topbar, type Crumb } from './Topbar'
+import { CommandPalette, useCommandPaletteShortcut } from '../command/CommandPalette'
 import { useRole } from '../../lib/role-context'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
 import { caseById } from '../../lib/data/cases'
@@ -74,6 +75,11 @@ export function AppLayout() {
   const { pathname } = useLocation()
   const { currentRole } = useRole()
   const [loading, setLoading] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [roleSwitchSignal, setRoleSwitchSignal] = useState(0)
+
+  const openPalette = useCallback(() => setPaletteOpen(true), [])
+  useCommandPaletteShortcut(openPalette)
 
   useEffect(() => {
     setLoading(true)
@@ -82,7 +88,7 @@ export function AppLayout() {
   }, [pathname])
 
   const caseId = pathname.startsWith('/cases/')
-    ? decodeURIComponent(pathname.slice('/cases/'.length))
+    ? decodeURIComponent(pathname.slice('/cases/'.length).split('?')[0]!)
     : null
   const record = caseId ? caseById(caseId) : undefined
 
@@ -123,9 +129,18 @@ export function AppLayout() {
     <div className="app-shell">
       <Sidebar />
       <div className="app-main">
-        <Topbar crumbs={crumbs} />
+        <Topbar
+          crumbs={crumbs}
+          onOpenPalette={openPalette}
+          roleSwitchSignal={roleSwitchSignal}
+        />
         <main className="app-content">{loading ? <RouteSkeleton /> : <Outlet />}</main>
       </div>
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onSwitchRole={() => setRoleSwitchSignal((n) => n + 1)}
+      />
     </div>
   )
 }

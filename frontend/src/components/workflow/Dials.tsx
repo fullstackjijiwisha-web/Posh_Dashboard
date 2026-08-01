@@ -174,6 +174,14 @@ export function QuorumList({ tests }: { tests: QuorumTest[] }) {
  * Coverage ring — a single proportion, for training and completion rates
  * ------------------------------------------------------------------ */
 
+/**
+ * Percentage lives inside the ring; the caption sits under it.
+ *
+ * Long phrases ("workforce covered", "fully evidenced") will not fit inside a
+ * ~116px dial without truncating or colliding with the stroke — which is exactly
+ * what the HR desk and Employer duties cards were doing. The figure stays in the
+ * centre; the label is outside, where it can be read in full.
+ */
 export function CoverageRing({
   value,
   size = 116,
@@ -196,27 +204,30 @@ export function CoverageRing({
   }[tone]
 
   return (
-    <div className="dial" style={dialBox(size)} title={`${Math.round(value)}% ${caption}`}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-border)" strokeWidth="5" />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke={stroke}
-          strokeWidth="5"
-          strokeLinecap="round"
-          strokeDasharray={c}
-          strokeDashoffset={c * (1 - pct)}
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          className="dial-arc"
-        />
-      </svg>
-      <div className="dial-centre">
-        <div className="dial-value">{Math.round(value)}%</div>
-        {size >= CAPTION_MIN_SIZE && <div className="dial-label">{caption}</div>}
+    <div className="coverage" style={{ width: size }} title={`${Math.round(value)}% ${caption}`}>
+      <div className="dial" style={dialBox(size)}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-border)" strokeWidth="5" />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke={stroke}
+            strokeWidth="5"
+            strokeLinecap="round"
+            strokeDasharray={c}
+            strokeDashoffset={c * (1 - pct)}
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+            className="dial-arc"
+          />
+        </svg>
+        <div className="dial-centre">
+          <div className="dial-value">{Math.round(value)}%</div>
+        </div>
       </div>
+      {/* Small dials sit inside a tile that already names the figure — no caption. */}
+      {size >= CAPTION_MIN_SIZE ? <div className="coverage-caption">{caption}</div> : null}
     </div>
   )
 }

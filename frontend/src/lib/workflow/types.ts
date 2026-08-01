@@ -418,6 +418,26 @@ export interface AdminAccount {
   createdAt: string
 }
 
+/**
+ * A notice addressed to one or more roles.
+ *
+ * `type` and `severity` drive the notification centre's filters and styling.
+ * `href` deep-links to the exact thing concerned — a case tab, a sitting, a queue —
+ * rather than dumping the reader on a list to hunt through.
+ */
+export type FlowNotificationType =
+  | 'clock_approaching'
+  | 'clock_breached'
+  | 'sitting_listed'
+  | 'sitting_at_risk'
+  | 'evidence_submitted'
+  | 'recommendation_awaiting'
+  | 'report_owed'
+  | 'escalation'
+  | 'lifecycle'
+
+export type FlowNotificationSeverity = 'critical' | 'warning' | 'info'
+
 export interface FlowNotification {
   id: string
   /** Role the notice is addressed to. */
@@ -427,6 +447,15 @@ export interface FlowNotification {
   detail: string
   at: string
   read: boolean
+  type: FlowNotificationType
+  severity: FlowNotificationSeverity
+  /** Deep link. Falls back to `/cases/{caseId}` when null and a case is present. */
+  href: string | null
+  /**
+   * Set when this notice was raised because an earlier one went unanswered past the
+   * escalation interval. Points at the originating notice.
+   */
+  escalatedFrom?: string | null
 }
 
 /**

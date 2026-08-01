@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, MapPin, Users } from 'lucide-react'
+import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Download, MapPin, Users } from 'lucide-react'
 import { useWorkflow } from '../lib/workflow/store'
 import { STAGE_META, isWorkflowTerminal } from '../lib/workflow/types'
 import { FigureTile } from '../components/workflow/Dials'
@@ -9,9 +9,12 @@ import { hearingsFor } from '../lib/data/caseDetail'
 import { dateNDaysAgo } from '../lib/data/statutory'
 import { formatTimestamp } from '../lib/format'
 import { actorName } from '../lib/data/users'
+import { downloadIcs } from '../lib/calendar/sittings'
+import { useToast } from '../lib/toast'
 import '../components/workflow/Workflow.css'
 import '../components/workflow/EmployeePortal.css'
 import '../components/workflow/Dials.css'
+import '../components/calendar/CalendarExtras.css'
 
 const ICON = { size: 14, strokeWidth: 1.5 } as const
 const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -40,6 +43,7 @@ interface Sitting {
  */
 export function HearingsAdminPage() {
   const { allCases, flowFor, scheduleHearing } = useWorkflow()
+  const { push } = useToast()
 
   const today = new Date(dateNDaysAgo(0) + 'T00:00:00')
   const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
@@ -148,12 +152,37 @@ export function HearingsAdminPage() {
             would be short of s.4 are marked before the day, not after it.
           </p>
         </div>
-        {!scheduling && (
-          <button type="button" className="btn btn-primary" onClick={() => setScheduling(true)}>
-            <CalendarPlus {...ICON} />
-            Schedule a session
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {!scheduling && (
+            <>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  downloadIcs(
+                    sittings
+                      .filter((s) => !s.done)
+                      .map((s) => ({
+                        ...s,
+                        durationMinutes: 90,
+                        source: 'fixture' as const,
+                      })),
+                    'sentinel-hearings.ics',
+                    'Sentinel — hearings',
+                  )
+                  push('Calendar file downloaded.', 'success')
+                }}
+              >
+                <Download {...ICON} />
+                Export .ics
+              </button>
+              <button type="button" className="btn btn-primary" onClick={() => setScheduling(true)}>
+                <CalendarPlus {...ICON} />
+                Schedule a session
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="figure-grid">
@@ -305,10 +334,11 @@ export function HearingsAdminPage() {
                     {list.slice(0, 3).map((s) => (
                       <span
                         key={s.id}
-                        className={`ep-cal-chip${s.done ? ' done' : s.short ? '' : ' mine'}`}
+                        className={`ep-cal-chip${s.done ? ' done' : s.short ? ' short' : ' mine'}`}
                         title={`${s.title} — ${s.caseId}${s.short ? ' (bench short)' : ''}`}
                       >
                         {s.at.slice(11, 16)} {s.caseId.slice(-4)}
+                        {s.short ? ' !' : ''}
                       </span>
                     ))}
                     {list.length > 3 ? <span className="ep-cal-num">+{list.length - 3} more</span> : null}

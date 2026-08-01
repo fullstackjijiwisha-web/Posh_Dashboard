@@ -230,9 +230,12 @@ export function HRDashboardPage() {
               </span>
               <span className="meta-pill">s.19(b)–(c)</span>
             </div>
-            <div className="ep-card-body" style={{ display: 'flex', gap: 'var(--space-5)', alignItems: 'center', flexWrap: 'wrap' }}>
-              <CoverageRing value={coverage} caption="workforce covered" />
-              <div style={{ minWidth: 0, flex: 1 }}>
+            <div
+              className="ep-card-body"
+              style={{ display: 'flex', gap: 'var(--space-5)', alignItems: 'center', flexWrap: 'wrap' }}
+            >
+              <CoverageRing value={coverage} caption="Workforce covered" />
+              <div style={{ minWidth: 140, flex: 1 }}>
                 <div className="ep-field-list" style={{ gridTemplateColumns: '1fr' }}>
                   <div>
                     <div className="ep-field-label">Employee workshops</div>
@@ -241,7 +244,7 @@ export function HRDashboardPage() {
                   <div>
                     <div className="ep-field-label">IC orientation</div>
                     <div className="ep-field-value">
-                      {sensitisation} sessions · {icTrained} members
+                      {sensitisation} session{sensitisation === 1 ? '' : 's'} · {icTrained} members
                     </div>
                   </div>
                 </div>
@@ -265,9 +268,12 @@ export function HRDashboardPage() {
               </span>
               <span className="meta-pill">{ANNUAL_REPORT.year}</span>
             </div>
-            <div className="ep-card-body" style={{ display: 'flex', gap: 'var(--space-5)', alignItems: 'center', flexWrap: 'wrap' }}>
-              <CoverageRing value={93} caption="fields ready" tone="info" />
-              <div style={{ minWidth: 0, flex: 1 }}>
+            <div
+              className="ep-card-body"
+              style={{ display: 'flex', gap: 'var(--space-5)', alignItems: 'center', flexWrap: 'wrap' }}
+            >
+              <CoverageRing value={93} caption="Fields ready" tone="info" />
+              <div style={{ minWidth: 140, flex: 1 }}>
                 <p className="text-12 text-muted" style={{ lineHeight: 1.6 }}>
                   The filing to the District Officer carries counts only — no party is ever named.
                   {ANNUAL_REPORT.functionalIc ? ' The committee is recorded as functional.' : ''}

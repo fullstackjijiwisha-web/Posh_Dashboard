@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
   ArrowDownLeft,
@@ -199,6 +199,16 @@ export function CasesPage() {
 
   const [selectedEvidence, setSelectedEvidence] = useState<string | null>(null)
   const [packOpen, setPackOpen] = useState(false)
+
+  // Command palette "Generate Defensibility Pack" lands here with ?pack=1.
+  useEffect(() => {
+    if (params.get('pack') === '1') {
+      setPackOpen(true)
+      const next = new URLSearchParams(params)
+      next.delete('pack')
+      setParams(next, { replace: true })
+    }
+  }, [params, setParams])
 
   /* Phase 6 — the document surfaces. Each is a dialog over the record, so the tab the
      reader was on is still behind it when they close. `issuing` holds a document id

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Bell, Check, ChevronDown, Search } from 'lucide-react'
+import { Bell, Check, ChevronDown, Presentation, Search } from 'lucide-react'
 import { useRole } from '../../lib/role-context'
+import { useWorkflow } from '../../lib/workflow/store'
 import { ROLES, ROLE_LABEL, type Role } from '../../lib/data/types'
 import { USER_BY_ROLE } from '../../lib/data/users'
+import { NotificationCentre } from '../notifications/NotificationCentre'
 import './Topbar.css'
 
 const ICON = { size: 16, strokeWidth: 1.5 } as const
@@ -13,10 +15,24 @@ export interface Crumb {
   to?: string
 }
 
-function RoleSwitcher() {
+export function RoleSwitcher({
+  forceOpen,
+  onOpenChange,
+}: {
+  forceOpen?: boolean
+  onOpenChange?: (open: boolean) => void
+}) {
   const { currentRole, setRole } = useRole()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (forceOpen) setOpen(true)
+  }, [forceOpen])
+
+  useEffect(() => {
+    onOpenChange?.(open)
+  }, [open, onOpenChange])
 
   useEffect(() => {
     if (!open) return
@@ -83,8 +99,28 @@ function RoleSwitcher() {
   )
 }
 
-export function Topbar({ crumbs }: { crumbs: Crumb[] }) {
-  const { currentUser } = useRole()
+export function Topbar({
+  crumbs,
+  onOpenPalette,
+  roleSwitchSignal,
+}: {
+  crumbs: Crumb[]
+  onOpenPalette: () => void
+  /** Increment to force-open the role switcher (command palette "Switch role"). */
+  roleSwitchSignal?: number
+}) {
+  const { currentUser, presenterMode, setPresenterMode } = useRole()
+  const { unreadCount } = useWorkflow()
+  const [notifOpen, setNotifOpen] = useState(false)
+  const [forceRole, setForceRole] = useState(false)
+  const notifWrap = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (roleSwitchSignal && roleSwitchSignal > 0) setForceRole(true)
+  }, [roleSwitchSignal])
+
+  const isMac =
+    typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 
   return (
     <header className="topbar">
@@ -106,18 +142,52 @@ export function Topbar({ crumbs }: { crumbs: Crumb[] }) {
         })}
       </nav>
 
-      <div className="search">
+      <button
+        type="button"
+        className="search"
+        onClick={onOpenPalette}
+        aria-label="Open command palette"
+      >
         <Search {...ICON} />
-        <input placeholder="Search cases, evidence, people" aria-label="Search" />
-        <span className="kbd">⌘K</span>
-      </div>
+        <span className="search-placeholder">Search cases, evidence, people</span>
+        <span className="kbd">{isMac ? '⌘K' : 'Ctrl K'}</span>
+      </button>
 
       <div className="topbar-right">
-        <RoleSwitcher />
-        <button className="icon-btn" aria-label="Notifications, 5 unread">
-          <Bell {...ICON} />
-          <span className="notif-dot">5</span>
-        </button>
+        {presenterMode ? (
+          <button
+            type="button"
+            className="presenter-pill"
+            onClick={() => setPresenterMode(false)}
+            title="Presenter Mode is on — identities are masked"
+          >
+            <Presentation size={12} strokeWidth={1.5} />
+            Presenter
+          </button>
+        ) : null}
+        <RoleSwitcher
+          forceOpen={forceRole}
+          onOpenChange={(o) => {
+            if (!o) setForceRole(false)
+          }}
+        />
+        <div className="notif-wrap" ref={notifWrap}>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label={
+              unreadCount > 0
+                ? `Notifications, ${unreadCount} unread`
+                : 'Notifications'
+            }
+            aria-expanded={notifOpen}
+            onClick={() => setNotifOpen((p) => !p)}
+          >
+            <Bell {...ICON} />
+            {unreadCount > 0 ? <span className="notif-dot">{unreadCount > 9 ? '9+' : unreadCount}</span> : null}
+          </button>
+          <NotificationCentre open={notifOpen} onClose={() => setNotifOpen(false)} />
+        </div>
         <div className="top-user">
           <div className="avatar sm">{currentUser?.initials ?? '--'}</div>
         </div>

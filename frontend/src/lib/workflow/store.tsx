@@ -311,6 +311,9 @@ function seedNotifications(): FlowNotification[] {
       detail: 'POSH-2026-0158 has been registered and is waiting to be taken up.',
       at: ts(2, '09:12'),
       read: false,
+      type: 'lifecycle',
+      severity: 'warning',
+      href: '/cases/POSH-2026-0158',
     },
     {
       id: 'n-seed-2',
@@ -320,6 +323,70 @@ function seedNotifications(): FlowNotification[] {
       detail: 'POSH-2026-0142 is at Day 84 of 90. Evidence review is outstanding.',
       at: ts(1, '15:40'),
       read: false,
+      type: 'clock_approaching',
+      severity: 'warning',
+      href: '/cases/POSH-2026-0142?tab=evidence',
+    },
+    {
+      id: 'n-seed-2b',
+      audience: ['presiding_officer', 'posh_admin'],
+      caseId: 'POSH-2026-0139',
+      title: 'Inquiry clock breached — s.11(4)',
+      detail: 'POSH-2026-0139 has passed the ninety-day inquiry window. The overrun reason is the reportable item.',
+      at: ts(5, '08:00'),
+      read: false,
+      type: 'clock_breached',
+      severity: 'critical',
+      href: '/cases/POSH-2026-0139?tab=workflow',
+    },
+    {
+      id: 'n-seed-2c',
+      audience: ['super_admin'],
+      caseId: 'POSH-2026-0139',
+      title: 'Escalation — inquiry clock unanswered',
+      detail: 'POSH-2026-0139 remained past s.11(4) without a recorded action for more than 24 hours. Escalated to the Company Owner.',
+      at: ts(4, '09:00'),
+      read: false,
+      type: 'escalation',
+      severity: 'critical',
+      href: '/cases/POSH-2026-0139',
+      escalatedFrom: 'n-seed-2b',
+    },
+    {
+      id: 'n-seed-2d',
+      audience: ['presiding_officer', 'ic_member', 'external_member'],
+      caseId: 'POSH-2026-0142',
+      title: 'Sitting at risk — bench may sit short',
+      detail: 'The deliberation sitting on POSH-2026-0142 has a member still awaiting confirmation. Bench short is predicted if they decline.',
+      at: ts(0, '18:20'),
+      read: false,
+      type: 'sitting_at_risk',
+      severity: 'warning',
+      href: '/cause-list',
+    },
+    {
+      id: 'n-seed-2e',
+      audience: ['posh_admin', 'presiding_officer'],
+      caseId: 'POSH-2026-0142',
+      title: 'Recommendation awaiting review',
+      detail: 'A recommendation on POSH-2026-0142 is ready for the employer audit.',
+      at: ts(0, '11:05'),
+      read: false,
+      type: 'recommendation_awaiting',
+      severity: 'warning',
+      href: '/recommendations',
+    },
+    {
+      id: 'n-seed-2f',
+      audience: ['posh_admin', 'super_admin'],
+      caseId: null,
+      title: 'Annual return owed',
+      detail: 'The s.21 annual return for the current calendar year has not yet been filed.',
+      at: ts(3, '10:00'),
+      read: false,
+      type: 'report_owed',
+      severity: 'warning',
+      href: '/annual-report',
     },
     // The complainant's own feed. Written as notices a person would actually receive,
     // in the order they would have arrived — the notification centre is the main way
@@ -332,6 +399,9 @@ function seedNotifications(): FlowNotification[] {
       detail: 'The Internal Committee is reviewing the material on record.',
       at: ts(1, '15:41'),
       read: false,
+      type: 'lifecycle',
+      severity: 'info',
+      href: '/my-complaints',
     },
     {
       id: 'n-seed-4',
@@ -341,6 +411,9 @@ function seedNotifications(): FlowNotification[] {
       detail: 'A sitting has been listed. You will be told separately if your attendance is required.',
       at: ts(6, '11:45'),
       read: true,
+      type: 'sitting_listed',
+      severity: 'info',
+      href: '/my-complaints',
     },
     {
       id: 'n-seed-5',
@@ -350,6 +423,9 @@ function seedNotifications(): FlowNotification[] {
       detail: 'A no-contact directive was issued under Section 12 at your request.',
       at: ts(66, '10:05'),
       read: true,
+      type: 'lifecycle',
+      severity: 'info',
+      href: '/cases/POSH-2026-0142',
     },
     {
       id: 'n-seed-6',
@@ -359,6 +435,9 @@ function seedNotifications(): FlowNotification[] {
       detail: 'A board has taken carriage of your complaint. Their names are on your case.',
       at: ts(80, '09:30'),
       read: true,
+      type: 'lifecycle',
+      severity: 'info',
+      href: '/my-complaints',
     },
     {
       id: 'n-seed-7',
@@ -368,8 +447,34 @@ function seedNotifications(): FlowNotification[] {
       detail: 'Your complaint was received and registered as POSH-2026-0142.',
       at: ts(83, '10:02'),
       read: true,
+      type: 'lifecycle',
+      severity: 'info',
+      href: '/my-complaints',
+    },
+    {
+      id: 'n-seed-8',
+      audience: ['ic_member', 'presiding_officer'],
+      caseId: 'POSH-2026-0142',
+      title: 'Evidence submitted',
+      detail: 'New material was filed on POSH-2026-0142 and is awaiting admission.',
+      at: ts(2, '14:22'),
+      read: false,
+      type: 'evidence_submitted',
+      severity: 'info',
+      href: '/cases/POSH-2026-0142?tab=evidence',
     },
   ]
+}
+
+/** Fill fields added in Phase 7 on snapshots written before them. */
+function upgradeNotification(n: FlowNotification): FlowNotification {
+  return {
+    ...n,
+    type: n.type ?? 'lifecycle',
+    severity: n.severity ?? 'info',
+    href: n.href ?? (n.caseId ? `/cases/${n.caseId}` : null),
+    escalatedFrom: n.escalatedFrom ?? null,
+  }
 }
 
 interface Persisted {
@@ -467,6 +572,13 @@ function loadState(): Persisted {
       f.history ??= []
       f.acceptedBy ??= []
       f.declinedBy ??= []
+    }
+    parsed.notifications = (parsed.notifications ?? seeded.notifications).map(upgradeNotification)
+    // Seed notices added after the snapshot was written — a breached clock or an
+    // escalation must appear even if the reader has an older localStorage.
+    const have = new Set(parsed.notifications.map((n) => n.id))
+    for (const n of seeded.notifications) {
+      if (!have.has(n.id)) parsed.notifications.push(n)
     }
     return parsed
   } catch {
@@ -567,6 +679,8 @@ export interface WorkflowState {
   ) => Promise<void>
   submitComplaint: (input: NewComplaintInput) => string
   markNotificationsRead: () => void
+  /** Mark a single notice read — used by the centre when one row is opened. */
+  markNotificationRead: (id: string) => void
   resetWorkflow: () => void
 }
 
@@ -679,7 +793,17 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   )
 
   const notify = useCallback(
-    (audience: Role[], caseId: string | null, title: string, detail: string) => {
+    (
+      audience: Role[],
+      caseId: string | null,
+      title: string,
+      detail: string,
+      meta?: {
+        type?: FlowNotification['type']
+        severity?: FlowNotification['severity']
+        href?: string | null
+      },
+    ) => {
       setState((prev) => ({
         ...prev,
         notifications: [
@@ -691,6 +815,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             detail,
             at: new Date().toISOString(),
             read: false,
+            type: meta?.type ?? 'lifecycle',
+            severity: meta?.severity ?? 'info',
+            href: meta?.href ?? (caseId ? `/cases/${caseId}` : null),
+            escalatedFrom: null,
           },
           ...prev.notifications,
         ],
@@ -1120,6 +1248,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             detail: 'A new complaint has been filed and is awaiting screening.',
             at: new Date().toISOString(),
             read: false,
+            type: 'lifecycle',
+            severity: 'warning',
+            href: `/cases/${id}`,
+            escalatedFrom: null,
           },
           ...prev.notifications,
         ],
@@ -1632,6 +1764,13 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     }))
   }, [currentRole])
 
+  const markNotificationRead = useCallback((id: string) => {
+    setState((prev) => ({
+      ...prev,
+      notifications: prev.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
+    }))
+  }, [])
+
   const resetWorkflow = useCallback(() => {
     setState(seedState())
   }, [])
@@ -1678,6 +1817,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       confirmMinutes,
       submitComplaint,
       markNotificationsRead,
+      markNotificationRead,
       resetWorkflow,
     }),
     [
@@ -1714,6 +1854,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       confirmMinutes,
       submitComplaint,
       markNotificationsRead,
+      markNotificationRead,
       resetWorkflow,
     ],
   )

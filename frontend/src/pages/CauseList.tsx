@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { CheckCircle2, ScrollText, X, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ScrollText, X, XCircle } from 'lucide-react'
 import { useWorkflow } from '../lib/workflow/store'
 import { STAGE_META, isWorkflowTerminal } from '../lib/workflow/types'
 import { QuorumRing, QuorumList } from '../components/workflow/Dials'
@@ -9,9 +9,17 @@ import { hearingsFor } from '../lib/data/caseDetail'
 import { dateNDaysAgo } from '../lib/data/statutory'
 import { formatDate, formatTimestamp } from '../lib/format'
 import { actorName } from '../lib/data/users'
+import {
+  attendanceFor,
+  attendanceSummary,
+  conflictsForSitting,
+  findConflicts,
+  type CalendarSitting,
+} from '../lib/calendar/sittings'
 import '../components/workflow/Workflow.css'
 import '../components/workflow/EmployeePortal.css'
 import '../components/workflow/Dials.css'
+import '../components/calendar/CalendarExtras.css'
 import { EmptyState } from '../components/ui/EmptyState'
 
 type Scope = 'Ahead' | 'Held' | 'All'
@@ -142,6 +150,24 @@ export function CauseListPage() {
 
   const defective = ahead.filter((s) => !allMet(sittingQuorumTests(s.attendees))).length
 
+  const conflictSource = useMemo<CalendarSitting[]>(
+    () =>
+      ahead.map((s) => ({
+        id: s.id,
+        caseId: s.caseId,
+        at: s.at,
+        durationMinutes: 90,
+        title: s.title,
+        where: s.where,
+        attendees: s.attendees,
+        done: false,
+        short: !allMet(sittingQuorumTests(s.attendees)),
+        source: 'fixture' as const,
+      })),
+    [ahead],
+  )
+  const conflicts = useMemo(() => findConflicts(conflictSource), [conflictSource])
+
   return (
     <div className="flex flex-col gap-5">
       <div className="page-header">
@@ -180,6 +206,9 @@ export function CauseListPage() {
           <span>
             <strong style={{ fontWeight: 500, color: 'var(--color-primary)' }}>
               {defective} listed sitting{defective === 1 ? '' : 's'} would sit short.
+              {conflicts.length > 0
+                ? ` · ${conflicts.length} diary conflict${conflicts.length === 1 ? '' : 's'}`
+                : ''}
             </strong>{' '}
             Open the entry to see which condition fails, and adjourn or reconstitute before the day.
           </span>
@@ -228,6 +257,19 @@ export function CauseListPage() {
                 const ok = allMet(tests)
                 const expanded = open === s.id
                 const urgent = !s.terminal && (s.breached || s.daysRemaining <= 14)
+                const att = attendanceSummary({
+                  id: s.id,
+                  caseId: s.caseId,
+                  at: s.at,
+                  durationMinutes: 90,
+                  title: s.title,
+                  where: s.where,
+                  attendees: s.attendees,
+                  done: s.status !== 'Scheduled',
+                  short: !ok,
+                  source: 'fixture',
+                })
+                const conf = conflictsForSitting(s.id, conflicts)
 
                 return (
                   <div key={s.id}>
@@ -253,6 +295,14 @@ export function CauseListPage() {
                           · {STAGE_META[s.stage].label} · {s.where}
                         </div>
                         <div className="ep-hearing-meta">{s.attendees.map(actorName).join(', ')}</div>
+                        {s.status === 'Scheduled' ? (
+                          <div className="ep-hearing-meta">
+                            Attendance · {att.confirmed} confirmed · {att.awaiting} awaiting ·{' '}
+                            {att.declined} declined
+                            {att.predictedShort ? ' · short predicted' : ''}
+                            {conf.length > 0 ? ' · diary conflict' : ''}
+                          </div>
+                        ) : null}
                       </div>
                       <span style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
                         <span className={`badge ${ok ? 'badge-completed' : 'badge-medium'}`}>
@@ -283,7 +333,7 @@ export function CauseListPage() {
                         style={{
                           display: 'flex',
                           gap: 'var(--space-6)',
-                          alignItems: 'center',
+                          alignItems: 'flex-start',
                           flexWrap: 'wrap',
                           padding: 'var(--space-5)',
                           margin: '2px 0 var(--space-2)',
@@ -295,6 +345,25 @@ export function CauseListPage() {
                         <QuorumRing tests={tests} size={116} />
                         <div style={{ minWidth: 240, flex: 1 }}>
                           <QuorumList tests={tests} />
+                          {s.status === 'Scheduled' ? (
+                            <div className="cal-att-row" style={{ marginTop: 12 }}>
+                              {s.attendees.map((mid) => {
+                                const st = attendanceFor(s.id, mid)
+                                return (
+                                  <span key={mid} className={`cal-att ${st}`}>
+                                    {actorName(mid).split(' ')[0]} · {st}
+                                  </span>
+                                )
+                              })}
+                            </div>
+                          ) : null}
+                          {conf.length > 0 ? (
+                            <div className="cal-conflict" style={{ marginTop: 10 }}>
+                              <AlertTriangle size={12} strokeWidth={1.5} />
+                              Diary conflict involving{' '}
+                              {conf.map((c) => c.memberName).join(', ')}
+                            </div>
+                          ) : null}
                         </div>
                         <div style={{ minWidth: 180 }}>
                           <div className="ep-field-label">Sitting</div>

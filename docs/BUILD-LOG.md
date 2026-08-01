@@ -491,3 +491,83 @@ surviving a reload.
 - **Minutes are per-sitting, keyed to the listed hearings.** Sittings scheduled through the
   workflow in-session appear in the Workflow tab; the minute book is reached from the
   Proceedings list.
+
+---
+
+## Phase 7 — Calendar, notifications and the command palette
+
+*PROMPT 7 from `docs/CRITIQUE.md`. All three sections built.*
+
+### Plan
+
+Three pieces of daily infrastructure that were advertised but hollow: the ⌘K affordance
+did nothing, the bell showed a hard-coded "5", and the hearing calendar was a month grid
+without conflicts, attendance or export. Built in that order — palette first (demo
+credibility), then notifications (the bell is next to it), then the calendar surfaces.
+
+### What was built
+
+**1. Command palette**
+
+- `components/command/CommandPalette.tsx` — centred dialog, blurred backdrop, fuzzy
+  search (no new dependency), keyboard navigation, grouped results, recent items.
+- Search across cases (respecting role visibility and Presenter Mode), people (identities
+  gated), documents, evidence and role-scoped destinations.
+- Quick actions behind `>`: Schedule a sitting, Generate Defensibility Pack, Toggle
+  Presenter Mode, Switch role.
+- Top bar search is now a button that opens the palette; ⌘/Ctrl+K works globally.
+
+**2. Calendar**
+
+- `lib/calendar/sittings.ts` — shared sitting collection, diary-conflict detection,
+  attendance RSVP (localStorage), reschedule overlays, `.ics` export and a copyable
+  feed URL.
+- `HearingCalendar` — month/week toggle, chips colour-coded by bench validity, conflict
+  banner, per-member confirm/decline with "short predicted", drag-to-reschedule with a
+  required reason and quorum re-check.
+- `CauseList` — attendance counts and diary conflicts inline; expanded row shows
+  confirmed / awaiting / declined per member.
+- `HearingsAdmin` — short chips use the amber style; `.ics` export for the whole caseload.
+
+**3. Notifications**
+
+- `FlowNotification` gained `type`, `severity`, `href` and optional `escalatedFrom`.
+  Seeds cover clock approaching/breached, sitting at risk, evidence, recommendation,
+  report owed and an escalation.
+- Bell opens `NotificationCentre` — grouped by day, filterable, mark-all-read, severity
+  styling, preferences (in-app / email / digest per type, escalation interval).
+- Full `/notifications` page uses the same vocabulary and deep-links every row.
+
+**Presenter Mode (minimal, for the palette action)** — `role-context` persists a toggle
+that forces `maskParty` to the masked label for every role. The alias layer from Phase 4
+is what a fuller Presenter Mode will consume later; this is enough for the live-demo
+action the critique asked for.
+
+### Standing rules
+
+- **Rule 5 — no new dependencies.** Fuzzy search is a few dozen lines.
+- **Rule 4 — accessibility.** Palette and notification panel are `role="dialog"` with
+  Escape-to-close; severity always pairs colour with an icon and a text label; RSVP
+  states are spelled out, not colour alone.
+- **Rule 2 — nothing broken.** Quorum engine consumed, not reimplemented. Workflow
+  store upgrades old notification snapshots on load.
+- **Rule 1 — vocabulary.** Sitting, bench, cause list, carriage. No "meetings" or
+  "alerts".
+
+### Verified
+
+Typecheck clean, production build clean, lint reports zero errors (only pre-existing
+fast-refresh export warnings).
+
+### Deviations
+
+- **Calendar RSVP and reschedule live outside the workflow snapshot**
+  (`sentinel.calendar.v1`). Resetting the workflow demo does not wipe attendance —
+  deliberate, so a walkthrough of the cause list survives a lifecycle reset. **TODO:
+  revisit** if a single "reset everything" control is wanted.
+- **Email and digest channels are preference flags only.** There is no mail transport.
+  The preferences UI records intent; delivery is not simulated.
+- **Presenter Mode is identity masking only.** Phase 2's fuller treatment (place aliases,
+  prose redaction on screen) is still ahead; the palette action toggles what exists.
+- **Subscribable feed URL is a `webcal://` demo string.** Copying it is real; a live
+  HTTP feed would need a backend. The `.ics` download carries the same events.

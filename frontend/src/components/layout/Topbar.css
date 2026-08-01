@@ -53,21 +53,22 @@
   width: 320px;
   margin: 0 auto;
   transition: border-color var(--ease);
+  cursor: pointer;
+  text-align: left;
 }
 
-.search:focus-within { border-color: var(--color-accent); }
+.search:hover,
+.search:focus-visible { border-color: var(--color-accent); }
 .search svg { flex-shrink: 0; }
 
-.search input {
-  border: none;
-  outline: none;
-  background: transparent;
-  width: 100%;
+.search-placeholder {
+  flex: 1;
   font-size: var(--text-sm);
-  color: var(--color-primary);
+  color: var(--color-tertiary-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
-.search input::placeholder { color: var(--color-tertiary-text); }
 
 .kbd {
   display: inline-flex;
@@ -80,6 +81,22 @@
   color: var(--color-secondary-text);
   font-size: var(--text-xs);
   flex-shrink: 0;
+}
+
+.notif-wrap { position: relative; }
+
+.presenter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  background: var(--color-accent-tint);
+  color: var(--color-accent);
+  font-size: var(--text-xs);
+  font-weight: 500;
 }
 
 /* Right cluster --------------------------------------------------------- */

@@ -112,16 +112,23 @@ export interface RoleState {
    * The only way a party name should ever reach the screen. Returns the masked label
    * unless the role holds 'view:identities' — and always masks the respondent for an
    * employee, who may see their own case but not who it names.
+   *
+   * Presenter Mode forces the masked label for every role, so a live demo never puts a
+   * real name on a projected screen.
    */
   maskParty: (
     party: { maskedName: string; actualName: string; role: 'complainant' | 'respondent' | 'witness' },
   ) => string
+  /** Live-demo anonymisation. Persists so a refresh mid-pitch does not unmask. */
+  presenterMode: boolean
+  setPresenterMode: (on: boolean) => void
 }
 
 const RoleContext = createContext<RoleState | null>(null)
 
 /** Where the signed-in role is kept between reloads. */
 const SESSION_KEY = 'sentinel.session.role'
+const PRESENTER_KEY = 'sentinel.presenter.mode'
 
 /**
  * Reads the persisted role synchronously, as a `useState` initialiser.
@@ -140,6 +147,15 @@ function readStoredRole(): Role | null {
   }
 }
 
+function readPresenterMode(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem(PRESENTER_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 export function RoleProvider({ children }: { children: ReactNode }) {
   /**
    * Persisted, not in memory.
@@ -150,6 +166,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
    * commonest action in an enterprise tool. Signing out still clears it.
    */
   const [currentRole, setCurrentRole] = useState<Role | null>(readStoredRole)
+  const [presenterMode, setPresenterModeState] = useState<boolean>(readPresenterMode)
 
   const setRole = useCallback((role: Role) => {
     setCurrentRole(role)
@@ -158,6 +175,15 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     } catch {
       // Private browsing or a full quota. The session still works, it just will not
       // survive a reload — which is the old behaviour, so nothing is worse than before.
+    }
+  }, [])
+
+  const setPresenterMode = useCallback((on: boolean) => {
+    setPresenterModeState(on)
+    try {
+      window.localStorage.setItem(PRESENTER_KEY, on ? '1' : '0')
+    } catch {
+      /* session-only is fine */
     }
   }, [])
 
@@ -194,14 +220,17 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       can,
       visibleCases,
       canOpenCase: (caseId) => visibleIds.has(caseId),
+      presenterMode,
+      setPresenterMode,
       maskParty: (party) => {
+        if (presenterMode) return party.maskedName
         if (!identities) return party.maskedName
         // An employee may see their own case but never the respondent's identity.
         if (currentRole === 'employee' && party.role !== 'complainant') return party.maskedName
         return party.actualName
       },
     }
-  }, [currentUser, currentRole, can, visibleCases, setRole, signOut])
+  }, [currentUser, currentRole, can, visibleCases, setRole, signOut, presenterMode, setPresenterMode])
 
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>
 }
