@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import {
   Archive,
   BarChart3,
@@ -34,6 +34,7 @@ import {
   Users,
   UserCog,
 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { useRole } from '../../lib/role-context'
 import { useWorkflow } from '../../lib/workflow/store'
 import { ROLE_LABEL, type Permission } from '../../lib/data/types'
@@ -312,6 +313,9 @@ const GROUPS = [
 export function Sidebar() {
   const { currentUser, currentRole, signOut, can } = useRole()
   const { unreadCount } = useWorkflow()
+  const { pathname } = useLocation()
+  const navRef = useRef<HTMLElement>(null)
+  const [indicator, setIndicator] = useState({ top: 0, height: 0, ready: false })
 
   // Same test the dashboard uses: a person with a case of their own and no sight of
   // anyone else's gets the complainant's product, not the caseload one.
@@ -337,6 +341,23 @@ export function Sidebar() {
     return true
   })
 
+  useEffect(() => {
+    const nav = navRef.current
+    if (!nav) return
+    const active = nav.querySelector<HTMLElement>('.nav-item.active')
+    if (!active) {
+      setIndicator((s) => ({ ...s, ready: false }))
+      return
+    }
+    const navBox = nav.getBoundingClientRect()
+    const box = active.getBoundingClientRect()
+    setIndicator({
+      top: box.top - navBox.top + nav.scrollTop + 6,
+      height: Math.max(8, box.height - 12),
+      ready: true,
+    })
+  }, [pathname, visible.length, currentRole])
+
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
@@ -349,7 +370,16 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="sidebar-nav">
+      <nav className="sidebar-nav" ref={navRef}>
+        <span
+          className="nav-indicator"
+          aria-hidden="true"
+          style={{
+            top: indicator.top,
+            height: indicator.height,
+            opacity: indicator.ready ? 1 : 0,
+          }}
+        />
         {GROUPS.map((group) => {
           const items = visible.filter((i) => i.group === group)
           if (!items.length) return null

@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
+import { CountUp } from '../ui/CountUp'
 import './Dials.css'
 
 /**
@@ -343,7 +344,7 @@ export function FigureTile({
                   : undefined
           }
         >
-          {value}
+          {typeof value === 'number' ? <CountUp value={value} /> : value}
         </div>
         {meta ? <div className="figure-meta">{meta}</div> : null}
         {to ? (

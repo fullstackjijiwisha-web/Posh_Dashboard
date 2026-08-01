@@ -78,8 +78,9 @@
   /* Text */
   --color-primary: #e6edf3;
   --color-primary-light: #c5d1db;
-  --color-secondary-text: #8b9ba8;
-  --color-tertiary-text: #5c6b77;
+  /* Bumped for WCAG AA on #0a1014 / #0F172A — previous #8b9ba8 / #5c6b77 failed 4.5:1. */
+  --color-secondary-text: #9aabba;
+  --color-tertiary-text: #7a8b98;
 
   /* Status */
   --color-success: #10b981;
@@ -118,15 +119,25 @@
   --radius-xl: 8px;
   --radius-full: 9999px; /* avatars and dots only — never buttons */
 
-  /* Borders, not shadows. Kept as no-ops so any stray reference stays flat. */
-  --shadow-sm: none;
-  --shadow-md: none;
-  --shadow-lg: none;
+  /* Borders, not shadows — elevated to three soft levels in Phase 8. */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.32);
 
   --sidebar-width: 240px;
   --topbar-height: 56px;
 
-  --ease: 150ms ease-out;
+  /* Motion language — one curve, three durations. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-micro: 150ms;
+  --duration-standard: 250ms;
+  --duration-page: 400ms;
+  --ease: var(--duration-micro) var(--ease-out);
+  --ease-standard: var(--duration-standard) var(--ease-out);
+  --ease-page: var(--duration-page) var(--ease-out);
+
+  /* Elevation borders — white at 6% on dark, never a heavy drop shadow. */
+  --elev-border: rgba(255, 255, 255, 0.06);
 }
 
 @layer base {
@@ -147,7 +158,7 @@
   body {
     font-family: var(--font-body);
     font-size: var(--text-base);
-    line-height: 1.5;
+    line-height: 1.6;
     color: var(--color-primary);
     background: var(--color-background);
     /* Every number, date and ID is tabular. Applied globally so nothing is missed;
@@ -239,13 +250,41 @@ svg text {
   100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }
 
-/* Entrance. Children stagger via --i set inline. */
-.rise {
-  animation: rise 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: calc(var(--i, 0) * 45ms);
+@keyframes value-pulse {
+  0%   { background-color: transparent; }
+  35%  { background-color: rgba(16, 185, 129, 0.14); }
+  100% { background-color: transparent; }
 }
 
-.fade-in { animation: fade 0.3s ease-out both; }
+@keyframes fill-left {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* Entrance. Children stagger via --i set inline (40ms apart). */
+.rise {
+  animation: rise var(--duration-page) var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+.fade-in { animation: fade var(--duration-standard) var(--ease-out) both; }
+
+.page-enter {
+  animation: rise var(--duration-page) var(--ease-out) both;
+}
+
+.stagger > * {
+  animation: rise var(--duration-page) var(--ease-out) both;
+}
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 40ms; }
+.stagger > *:nth-child(3) { animation-delay: 80ms; }
+.stagger > *:nth-child(4) { animation-delay: 120ms; }
+.stagger > *:nth-child(5) { animation-delay: 160ms; }
+.stagger > *:nth-child(6) { animation-delay: 200ms; }
+.stagger > *:nth-child(7) { animation-delay: 240ms; }
+.stagger > *:nth-child(8) { animation-delay: 280ms; }
+.stagger > *:nth-child(n+9) { animation-delay: 320ms; }
 
 /* A single accent sweep across the top hairline of a panel. */
 .sweep-line {
@@ -273,28 +312,72 @@ svg text {
   animation: pulse-ring 2s ease-out infinite;
 }
 
+.value-changed {
+  animation: value-pulse 600ms var(--ease-out);
+  border-radius: var(--radius-sm);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .rise, .fade-in { animation: none; }
-  .sweep-line::before, .live-dot { animation: none; }
+  .rise, .fade-in, .page-enter, .stagger > * { animation: none; }
+  .sweep-line::before, .live-dot, .value-changed { animation: none; }
 }
 
 /* Surfaces -------------------------------------------------------------- */
 
 .card {
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--elev-border);
   border-radius: var(--radius-lg);
-  transition: border-color var(--ease), background-color var(--ease);
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color var(--duration-micro) var(--ease-out),
+    background-color var(--duration-micro) var(--ease-out),
+    transform var(--duration-micro) var(--ease-out),
+    box-shadow var(--duration-micro) var(--ease-out);
 }
 
-/* Interactive panels lift on hover via border, never a shadow. */
-.card-hover:hover {
-  border-color: var(--color-border-strong);
+/* Interactive panels lift 2px and brighten their border. */
+.card-hover:hover,
+.card.interactive:hover,
+.ep-card.interactive:hover,
+.figure-tile:hover {
+  border-color: rgba(255, 255, 255, 0.12);
   background: var(--color-raised);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Three elevation levels */
+.elev-1 {
+  border: 1px solid var(--elev-border);
+  box-shadow: var(--shadow-sm);
+}
+.elev-2 {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: var(--shadow-md);
+}
+.elev-3 {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-lg);
 }
 
 /* Card padding is always 20px. */
 .card-pad { padding: var(--space-5); }
+
+/* Subtle noise over the canvas — kills banding on dark gradients. */
+.app-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.02;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 180px 180px;
+}
+
+.app-shell > * { position: relative; z-index: 1; }
 
 /* Controls -------------------------------------------------------------- */
 
@@ -309,6 +392,7 @@ svg text {
   font-weight: 500;
   font-size: var(--text-sm);
   transition: background-color var(--ease), border-color var(--ease), color var(--ease);
+  position: relative;
 }
 
 .btn-primary {
@@ -324,6 +408,35 @@ svg text {
   border: 1px solid var(--color-border);
 }
 .btn-secondary:hover { background: var(--color-raised); border-color: var(--color-border-strong); }
+
+/* Working state — spinner replaces the label, never a silent disabled button. */
+.btn.busy {
+  pointer-events: none;
+  color: transparent !important;
+}
+.btn.busy > * { visibility: hidden; }
+.btn.busy::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 0.7s linear infinite;
+  color: inherit;
+  opacity: 1;
+}
+.btn-primary.busy::after { color: #06231a; }
+.btn-secondary.busy::after { color: var(--color-primary); }
+
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn.busy::after { animation: none; border-right-color: currentColor; opacity: 0.6; }
+}
 
 .select, .input {
   height: 36px;

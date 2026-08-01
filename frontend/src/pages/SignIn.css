@@ -160,28 +160,73 @@
 
 .role-chip {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
+  padding: var(--space-3);
+  border: 1px solid var(--elev-border, var(--color-border));
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   text-align: left;
   min-width: 0;
-  transition: background-color var(--ease), border-color var(--ease);
+  transition:
+    background-color var(--duration-micro, 150ms) var(--ease-out, ease),
+    border-color var(--duration-micro, 150ms) var(--ease-out, ease),
+    transform var(--duration-standard, 250ms) var(--ease-out, ease),
+    opacity var(--duration-standard, 250ms) var(--ease-out, ease),
+    box-shadow var(--duration-micro, 150ms) var(--ease-out, ease);
 }
 
 .role-chip:hover {
   background: var(--color-raised);
   border-color: var(--color-accent);
+  transform: translateY(-2px);
+}
+
+.role-chip-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .role-chip-name {
   font-size: var(--text-sm);
+  font-weight: 500;
   color: var(--color-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.role-chip-blurb {
+  font-size: 11px;
+  color: var(--color-secondary-text);
+  line-height: 1.4;
+}
+
+.role-chip.selected {
+  border-color: var(--color-accent);
+  background: var(--color-accent-tint);
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.28));
+  z-index: 2;
+}
+
+.role-chip.dimmed {
+  opacity: 0.35;
+  transform: scale(0.98);
+}
+
+.signin.is-entering .signin-form-wrap {
+  animation: door-open 420ms var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)) both;
+}
+
+@keyframes door-open {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-12px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signin.is-entering .signin-form-wrap { animation: none; }
+  .role-chip.selected, .role-chip.dimmed, .role-chip:hover { transform: none; }
 }
 
 .signin-note {
@@ -190,6 +235,16 @@
   color: var(--color-tertiary-text);
   max-width: 400px;
   width: 100%;
+  line-height: 1.6;
+}
+
+.signin-note kbd {
+  display: inline-block;
+  padding: 0 5px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
 }
 
 @media (max-width: 900px) {

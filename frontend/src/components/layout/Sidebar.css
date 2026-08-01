@@ -51,6 +51,7 @@
   flex: 1;
   overflow-y: auto;
   padding: var(--space-3) var(--space-2);
+  position: relative;
 }
 
 .nav-section {
@@ -84,21 +85,29 @@
   color: var(--color-primary);
 }
 
-/* Active: raised panel, accent text, and a 2px accent bar on the leading edge. */
+/* Active: raised panel, accent text. The sliding bar is a shared element. */
 .nav-item.active {
   background: var(--color-accent-tint);
   color: var(--color-accent);
 }
 
-.nav-item.active::before {
-  content: "";
+.nav-item.active::before { display: none; }
+
+.nav-indicator {
   position: absolute;
   left: 0;
-  top: 6px;
-  bottom: 6px;
   width: 2px;
   border-radius: 0 2px 2px 0;
   background: var(--color-accent);
+  transition: top var(--duration-standard, 250ms) var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)),
+    height var(--duration-standard, 250ms) var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)),
+    opacity var(--duration-micro, 150ms) var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+  pointer-events: none;
+  z-index: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-indicator { transition: none; }
 }
 
 .nav-badge {

@@ -1,86 +1,185 @@
+import { useEffect, useMemo, useState } from 'react'
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Circle,
+  Clock,
+  PlayCircle,
+} from 'lucide-react'
 import type { Case } from '../../lib/data/types'
 import { formatDate } from '../../lib/format'
+import './ComplianceClock.css'
+
+export type ClockState = 'met' | 'running' | 'not_started' | 'breached'
 
 export interface ClockMilestone {
   name: string
   rule: string
-  status: 'done' | 'active' | 'pending'
+  /** Statutory basis shown on hover. */
+  basis: string
+  state: ClockState
   targetDate: string | null
   actualDate: string | null
-  dayInfo: string | null
+  /** Days remaining on an active clock; null otherwise. */
+  daysRemaining: number | null
 }
 
-/** Build the 7-stage statutory track for the Compliance Clock centrepiece. */
-export function buildClockMilestones(record: Case): ClockMilestone[] {
+function daysBetween(from: string, to: string): number {
+  const a = new Date(from + (from.length === 10 ? 'T00:00:00' : ''))
+  const b = new Date(to + (to.length === 10 ? 'T00:00:00' : ''))
+  return Math.round((b.getTime() - a.getTime()) / 86_400_000)
+}
+
+/** Build the statutory track for the Compliance Clock centrepiece. */
+export function buildClockMilestones(record: Case, todayIso?: string): ClockMilestone[] {
   const m = record.milestones
-  const isFlagship = record.daysElapsed === 84 && record.stage === 'inquiry'
+  const today =
+    todayIso ??
+    (() => {
+      const d = new Date()
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    })()
+
+  const remainingTo = (due: string | null): number | null => {
+    if (!due) return null
+    return daysBetween(today, due)
+  }
+
+  const noticeDone = !!m.noticeServedOn
+  const replyDone = !!m.replyReceivedOn
+  const inquiryDone = !!m.inquiryCompletedOn
+  const reportDone = !!m.reportSubmittedOn
+  const actionDone = !!m.actionTakenOn
+
+  const noticeLate = !noticeDone && m.noticeDue < today
+  const replyLate = noticeDone && !replyDone && !!m.replyDue && m.replyDue < today
+  const inquiryLate = !inquiryDone && (record.isBreached || m.inquiryDue < today)
+  const reportLate = inquiryDone && !reportDone && !!m.reportDue && m.reportDue < today
+  const actionLate = reportDone && !actionDone && !!m.actionDue && m.actionDue < today
 
   return [
     {
       name: 'Complaint filed',
       rule: 'Day 0',
-      status: 'done',
+      basis: 'The complaint is registered. All subsequent clocks run from this date.',
+      state: 'met',
       targetDate: record.filedDate,
       actualDate: record.filedDate,
-      dayInfo: null,
+      daysRemaining: null,
     },
     {
       name: 'Notice served on respondent',
       rule: 'Within 7 working days',
-      status: m.noticeServedOn ? 'done' : record.daysElapsed > 12 ? 'active' : 'pending',
+      basis: 'Rule 7(1) — notice of the complaint within seven working days of receipt.',
+      state: noticeDone ? 'met' : noticeLate ? 'breached' : 'running',
       targetDate: m.noticeDue,
       actualDate: m.noticeServedOn,
-      dayInfo: m.noticeServedOn ? (isFlagship ? 'Day 4 of 7' : 'Completed within window') : null,
+      daysRemaining: noticeDone || noticeLate ? null : remainingTo(m.noticeDue),
     },
     {
       name: 'Respondent reply received',
       rule: 'Within 10 working days',
-      status: m.replyReceivedOn
-        ? 'done'
-        : m.noticeServedOn && !m.replyReceivedOn
-          ? 'active'
-          : 'pending',
+      basis: 'Rule 7(4) — the respondent may reply within ten working days of the notice.',
+      state: replyDone
+        ? 'met'
+        : replyLate
+          ? 'breached'
+          : noticeDone
+            ? 'running'
+            : 'not_started',
       targetDate: m.replyDue,
       actualDate: m.replyReceivedOn,
-      dayInfo: m.replyReceivedOn ? (isFlagship ? 'Day 9 of 10' : 'Completed within window') : null,
+      daysRemaining: replyDone || replyLate || !noticeDone ? null : remainingTo(m.replyDue),
     },
     {
       name: 'Inquiry completion',
       rule: 'Within 90 days',
-      status: m.inquiryCompletedOn ? 'done' : m.replyReceivedOn || record.stage === 'inquiry' ? 'active' : 'pending',
+      basis: 's.11(4) — the inquiry shall be completed within a period of ninety days.',
+      state: inquiryDone
+        ? 'met'
+        : inquiryLate
+          ? 'breached'
+          : replyDone || record.stage === 'inquiry' || noticeDone
+            ? 'running'
+            : 'not_started',
       targetDate: m.inquiryDue,
       actualDate: m.inquiryCompletedOn,
-      dayInfo: m.inquiryCompletedOn
+      daysRemaining: inquiryDone
         ? null
-        : record.stage === 'inquiry' || m.replyReceivedOn
-          ? `Day ${record.daysElapsed} of 90`
-          : null,
+        : inquiryLate
+          ? record.daysRemaining
+          : remainingTo(m.inquiryDue),
     },
     {
       name: 'IC report to employer',
       rule: 'Within 10 days of inquiry',
-      status: m.reportSubmittedOn ? 'done' : m.inquiryCompletedOn ? 'active' : 'pending',
+      basis: 's.13(1) — the committee shall provide a report within ten days of completing the inquiry.',
+      state: reportDone
+        ? 'met'
+        : reportLate
+          ? 'breached'
+          : inquiryDone
+            ? 'running'
+            : 'not_started',
       targetDate: m.reportDue,
       actualDate: m.reportSubmittedOn,
-      dayInfo: null,
+      daysRemaining: reportDone || reportLate || !inquiryDone ? null : remainingTo(m.reportDue),
     },
     {
       name: 'Employer action on recommendations',
       rule: 'Within 60 days',
-      status: m.actionTakenOn ? 'done' : m.reportSubmittedOn ? 'active' : 'pending',
+      basis: 's.13(4) — the employer shall act on the recommendations within sixty days.',
+      state: actionDone
+        ? 'met'
+        : actionLate
+          ? 'breached'
+          : reportDone
+            ? 'running'
+            : 'not_started',
       targetDate: m.actionDue,
       actualDate: m.actionTakenOn,
-      dayInfo: null,
+      daysRemaining: actionDone || actionLate || !reportDone ? null : remainingTo(m.actionDue),
     },
     {
       name: 'Appeal window',
       rule: '90 days',
-      status: m.actionTakenOn ? (m.appealWindowEnds ? 'active' : 'done') : 'pending',
+      basis: 's.18 — either party may appeal within ninety days of the recommendations.',
+      state: actionDone
+        ? m.appealWindowEnds && m.appealWindowEnds >= today
+          ? 'running'
+          : 'met'
+        : 'not_started',
       targetDate: m.appealWindowEnds,
       actualDate: null,
-      dayInfo: null,
+      daysRemaining:
+        actionDone && m.appealWindowEnds && m.appealWindowEnds >= today
+          ? remainingTo(m.appealWindowEnds)
+          : null,
     },
   ]
+}
+
+const STATE_LABEL: Record<ClockState, string> = {
+  met: 'Met',
+  running: 'Running',
+  not_started: 'Not started',
+  breached: 'Breached',
+}
+
+function StateIcon({ state }: { state: ClockState }) {
+  const props = { size: 12, strokeWidth: 2 } as const
+  if (state === 'met') return <CheckCircle2 {...props} />
+  if (state === 'running') return <PlayCircle {...props} />
+  if (state === 'breached') return <AlertTriangle {...props} />
+  return <Circle {...props} />
+}
+
+function urgencyClass(ms: ClockMilestone): string {
+  if (ms.state === 'breached') return 'breached'
+  if (ms.state === 'met') return 'met'
+  if (ms.state === 'not_started') return 'idle'
+  if (ms.daysRemaining != null && ms.daysRemaining <= 14) return 'urgent'
+  return 'running'
 }
 
 interface ComplianceClockProps {
@@ -89,82 +188,133 @@ interface ComplianceClockProps {
 }
 
 /**
- * THE COMPLIANCE CLOCK — centrepiece of the case workspace left rail.
- * Vertical milestone track with statutory rules, target/actual dates, and delay alert.
+ * THE COMPLIANCE CLOCK — hero of the case record.
+ *
+ * A vertical timeline with a filled progress spine. Colour encodes urgency and is
+ * always paired with an icon and a text label. Breached clocks pulse slowly —
+ * gravity, not an alarm.
  */
 export function ComplianceClock({ record, onRecordDelay }: ComplianceClockProps) {
-  const milestones = buildClockMilestones(record)
+  const milestones = useMemo(() => buildClockMilestones(record), [record])
+  const [nowLabel, setNowLabel] = useState(() => new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }))
+
+  // Live countdown tick once a minute so "12 days remaining" stays honest across a long session.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setNowLabel(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }))
+    }, 60_000)
+    return () => window.clearInterval(id)
+  }, [])
+
+  const activeIdx = milestones.findIndex((m) => m.state === 'running' || m.state === 'breached')
+  const metCount = milestones.filter((m) => m.state === 'met').length
+  const progress = metCount / Math.max(1, milestones.length - 1)
+  const anyBreached = milestones.some((m) => m.state === 'breached') || record.isBreached
 
   return (
-    <div className="cw-clock sweep-line">
-      <div className="cw-clock-title">Compliance Clock</div>
-      <div className="cw-milestone-track">
+    <div
+      className={`cc-clock elev-2${anyBreached ? ' is-breached' : ''}`}
+      aria-live="polite"
+      aria-label="Compliance clock"
+    >
+      <div className="cc-head">
+        <div>
+          <div className="cc-eyebrow">
+            <Clock size={13} strokeWidth={1.5} />
+            Compliance clock
+          </div>
+          <div className="cc-title">Statutory track</div>
+        </div>
+        <span className="cc-live" title={`Updated ${nowLabel}`}>
+          <span className="live-dot" aria-hidden="true" />
+          Live
+        </span>
+      </div>
+
+      <div className="cc-track" style={{ ['--cc-progress' as string]: String(progress) }}>
+        <div className="cc-spine" aria-hidden="true">
+          <div className="cc-spine-fill" />
+        </div>
+
         {milestones.map((ms, i) => {
-          const isLast = i === milestones.length - 1
-          const dotClass =
-            ms.status === 'done'
-              ? 'cw-dot-done'
-              : ms.status === 'active'
-                ? 'cw-dot-active'
-                : 'cw-dot-pending'
-
-          // Green connector for completed segments; slate for pending.
-          const lineClass = ms.status === 'done' ? 'cw-line-done' : 'cw-line-pending'
-
+          const active = i === activeIdx
+          const urg = urgencyClass(ms)
           return (
-            <div key={ms.name} className="cw-milestone-row">
-              <div className="cw-milestone-dot-col">
-                <div className={`cw-milestone-dot ${dotClass}`} />
-                {!isLast && <div className={`cw-milestone-line ${lineClass}`} />}
+            <div
+              key={ms.name}
+              className={`cc-row state-${ms.state}${active ? ' is-active' : ''} urg-${urg}`}
+              title={ms.basis}
+            >
+              <div className="cc-dot-col">
+                <span className={`cc-dot state-${ms.state}`} aria-hidden="true">
+                  <StateIcon state={ms.state} />
+                </span>
               </div>
-              <div className="cw-milestone-info">
-                <div className={`cw-milestone-name ${ms.status === 'active' ? 'cw-active-name' : ''}`}>
-                  {ms.name}
+              <div className="cc-body">
+                <div className="cc-name-row">
+                  <span className="cc-name">{ms.name}</span>
+                  <span className={`cc-state-pill state-${ms.state}`}>
+                    <StateIcon state={ms.state} />
+                    {STATE_LABEL[ms.state]}
+                  </span>
                 </div>
-                <div className="cw-milestone-rule">{ms.rule}</div>
-                <div className="cw-milestone-dates">
-                  {ms.targetDate && <span>Target: {formatDate(ms.targetDate)}</span>}
-                  {ms.actualDate && (
-                    <span className="cw-date-actual">✓ {formatDate(ms.actualDate)}</span>
-                  )}
-                  {ms.dayInfo && (
-                    <span
-                      className={`cw-date-day-count ${ms.status === 'active' ? 'cw-danger' : ''}`}
-                    >
-                      {ms.dayInfo}
+                <div className="cc-rule">{ms.rule}</div>
+                <div className="cc-dates">
+                  {ms.targetDate ? (
+                    <span>
+                      Target <strong className="mono">{formatDate(ms.targetDate)}</strong>
                     </span>
-                  )}
+                  ) : null}
+                  {ms.actualDate ? (
+                    <span className="cc-met-date">
+                      Met <strong className="mono">{formatDate(ms.actualDate)}</strong>
+                    </span>
+                  ) : null}
                 </div>
+                {active && ms.daysRemaining != null ? (
+                  <div className={`cc-countdown urg-${urg}`} aria-live="polite">
+                    {ms.state === 'breached'
+                      ? ms.daysRemaining < 0
+                        ? `${Math.abs(ms.daysRemaining)} days past the limit`
+                        : 'Past the statutory limit'
+                      : ms.daysRemaining === 0
+                        ? 'Due today'
+                        : `${ms.daysRemaining} day${ms.daysRemaining === 1 ? '' : 's'} remaining`}
+                  </div>
+                ) : null}
+                <div className="cc-basis">{ms.basis}</div>
               </div>
             </div>
           )
         })}
       </div>
 
-      {record.daysRemaining > 0 && record.daysRemaining <= 14 && (
-        <div className="cw-alert-card">
-          <div className="cw-alert-text">
-            {record.daysRemaining} days remaining to complete inquiry. Delay beyond 90 days must
-            be recorded with reasons.
+      {record.daysRemaining > 0 && record.daysRemaining <= 14 && !record.isBreached ? (
+        <div className="cc-alert">
+          <div className="cc-alert-text">
+            {record.daysRemaining} days remaining to complete the inquiry. Delay beyond 90 days
+            must be recorded with reasons.
           </div>
-          <button type="button" className="cw-alert-btn" onClick={onRecordDelay}>
-            Record reason for delay
-          </button>
+          {onRecordDelay ? (
+            <button type="button" className="btn btn-secondary" onClick={onRecordDelay}>
+              Record reason for delay
+            </button>
+          ) : null}
         </div>
-      )}
+      ) : null}
 
-      {record.isBreached && (
-        <div className="cw-alert-card">
-          <div className="cw-alert-text">
+      {record.isBreached ? (
+        <div className="cc-alert breached">
+          <div className="cc-alert-text">
             Inquiry has exceeded the 90-day statutory window. Reportable under Rule 8(5).
           </div>
-          {record.breachReason && (
-            <div className="cw-alert-reason">
+          {record.breachReason ? (
+            <div className="cc-alert-reason">
               <strong>Recorded reason:</strong> {record.breachReason}
             </div>
-          )}
+          ) : null}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

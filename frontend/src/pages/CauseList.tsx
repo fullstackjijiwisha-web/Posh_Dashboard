@@ -251,7 +251,7 @@ export function CauseListPage() {
                 {sittings.length} sitting{sittings.length === 1 ? '' : 's'}
               </span>
             </div>
-            <div className="ep-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+            <div className="ep-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }} data-nav-list>
               {sittings.map((s) => {
                 const tests = sittingQuorumTests(s.attendees)
                 const ok = allMet(tests)
@@ -277,6 +277,7 @@ export function CauseListPage() {
                       type="button"
                       className={`bench-row${urgent ? ' urgent' : ''}`}
                       style={{ width: '100%', textAlign: 'left' }}
+                      data-nav-item
                       onClick={() => setOpen(expanded ? null : s.id)}
                       aria-expanded={expanded}
                     >

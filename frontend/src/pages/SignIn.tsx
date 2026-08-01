@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ShieldCheck } from 'lucide-react'
 import { useRole } from '../lib/role-context'
@@ -7,42 +7,55 @@ import { USER_BY_ROLE } from '../lib/data/users'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import './SignIn.css'
 
+/** One line under each demo role — turns the login into a permission-model explainer. */
+const ROLE_BLURB: Record<Role, string> = {
+  employee: 'Own case only — tracker, documents, help. Never sees the respondent’s identity.',
+  hr_spoc: 'Intake desk and the s.19 duty register. No inquiry content.',
+  posh_admin: 'Filing ingest, statutory workspace, hearings, analytics and audit.',
+  presiding_officer: 'Cause list, quorum instruments, and carriage of the inquiry.',
+  ic_member: 'Inquiry queue, attendance, and the tasks assigned to you.',
+  external_member: 'Oversight of the cases you sit on — evidence, documents, recommendations.',
+  management: 'The compliance command centre, and nothing else. No party names.',
+  super_admin: 'Admin console plus provisioning and company settings. Never adjudicates.',
+}
+
 export function SignInPage() {
   const { currentRole, setRole } = useRole()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [selecting, setSelecting] = useState<Role | null>(null)
+  const navTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useDocumentTitle('Sign in')
 
-  /**
-   * The root path always shows this screen, even with a session open.
-   *
-   * It used to redirect to the dashboard whenever a role was stored, which meant that
-   * once you had signed in once you could never reach the sign-in screen again without
-   * signing out — and picking a role is the first thing anyone wants to do here.
-   *
-   * That redirect was never what deep linking needed. Prompt 1 asked that a *reload of a
-   * route* keeps its route and role, which `AppLayout` handles; `/` is not a route
-   * somebody was on, it is the front door. So the front door stays open, and an existing
-   * session is offered as a shortcut rather than imposed as a destination.
-   */
+  useEffect(() => {
+    return () => {
+      if (navTimer.current) clearTimeout(navTimer.current)
+    }
+  }, [])
+
   const returning = currentRole ? USER_BY_ROLE[currentRole] : null
 
   const enter = (role: Role) => {
+    setSelecting(role)
     setRole(role)
-    navigate('/dashboard')
+    const reduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    navTimer.current = setTimeout(
+      () => navigate('/dashboard'),
+      reduced ? 0 : 420,
+    )
   }
 
-  // The prototype does not validate. Signing in lands on the Presiding Officer view,
-  // which is the persona with the fullest access to the flagship case.
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
     enter('presiding_officer')
   }
 
   return (
-    <div className="signin">
+    <div className={`signin${selecting ? ' is-entering' : ''}`}>
       <aside className="signin-panel">
         <div className="signin-brand">
           <span className="signin-mark">
@@ -100,7 +113,6 @@ export function SignInPage() {
             Sign in
           </button>
 
-          {/* An open session is a shortcut back, not a redirect past this screen. */}
           {returning && currentRole && (
             <div className="signin-resume">
               <span className="avatar sm">{returning.initials}</span>
@@ -118,24 +130,38 @@ export function SignInPage() {
             <span>Demo — sign in as</span>
           </div>
 
-          <div className="role-chips">
-            {ROLES.map((role) => (
-              <button
-                key={role}
-                type="button"
-                className={`role-chip${role === currentRole ? ' current' : ''}`}
-                onClick={() => enter(role)}
-              >
-                <span className="avatar sm">{USER_BY_ROLE[role].initials}</span>
-                <span className="role-chip-name">{ROLE_LABEL[role]}</span>
-              </button>
-            ))}
+          <div className="role-chips" role="list">
+            {ROLES.map((role, i) => {
+              const selected = selecting === role
+              const dimmed = selecting !== null && !selected
+              return (
+                <button
+                  key={role}
+                  type="button"
+                  role="listitem"
+                  className={`role-chip rise${role === currentRole ? ' current' : ''}${selected ? ' selected' : ''}${dimmed ? ' dimmed' : ''}`}
+                  style={{ ['--i' as string]: i }}
+                  onClick={() => enter(role)}
+                  disabled={selecting !== null}
+                  aria-describedby={`role-blurb-${role}`}
+                >
+                  <span className="avatar sm">{USER_BY_ROLE[role].initials}</span>
+                  <span className="role-chip-body">
+                    <span className="role-chip-name">{ROLE_LABEL[role]}</span>
+                    <span className="role-chip-blurb" id={`role-blurb-${role}`}>
+                      {ROLE_BLURB[role]}
+                    </span>
+                  </span>
+                </button>
+              )
+            })}
           </div>
         </form>
 
         <p className="signin-note">
           Prototype — no backend. Your role is remembered so a shared case link survives a
-          reload; this screen stays reachable at any time.
+          reload; this screen stays reachable at any time. Press <kbd>?</kbd> after signing in
+          for keyboard shortcuts.
         </p>
       </section>
     </div>

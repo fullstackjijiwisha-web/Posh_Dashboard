@@ -3,6 +3,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Topbar, type Crumb } from './Topbar'
 import { CommandPalette, useCommandPaletteShortcut } from '../command/CommandPalette'
+import { KeyboardShortcuts } from '../keyboard/KeyboardShortcuts'
 import { useRole } from '../../lib/role-context'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
 import { caseById } from '../../lib/data/cases'
@@ -134,13 +135,16 @@ export function AppLayout() {
           onOpenPalette={openPalette}
           roleSwitchSignal={roleSwitchSignal}
         />
-        <main className="app-content">{loading ? <RouteSkeleton /> : <Outlet />}</main>
+        <main className="app-content">
+          {loading ? <RouteSkeleton /> : <div className="page-enter" key={pathname}><Outlet /></div>}
+        </main>
       </div>
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
         onSwitchRole={() => setRoleSwitchSignal((n) => n + 1)}
       />
+      <KeyboardShortcuts />
     </div>
   )
 }

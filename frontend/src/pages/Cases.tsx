@@ -390,6 +390,9 @@ export function CasesPage() {
             </button>
           )}
 
+          {/* ═══ Compliance Clock — hero of the left rail ═══ */}
+          <ComplianceClock record={record} />
+
           {/* ═══ Workflow position ═══ */}
           {flow && (
             <div>
@@ -399,9 +402,6 @@ export function CasesPage() {
               </div>
             </div>
           )}
-
-          {/* ═══ Compliance Clock ═══ */}
-          <ComplianceClock record={record} />
 
           {/* ═══ Parties ═══ */}
           <div>

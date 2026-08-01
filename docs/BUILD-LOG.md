@@ -571,3 +571,54 @@ fast-refresh export warnings).
   prose redaction on screen) is still ahead; the palette action toggles what exists.
 - **Subscribable feed URL is a `webcal://` demo string.** Copying it is real; a live
   HTTP feed would need a backend. The `.ics` download carries the same events.
+
+---
+
+## Phase 8 — Make it feel magical
+
+*PROMPT 8 from `docs/CRITIQUE.md`. Craft pass — motion, hero clock, surfaces, feedback,
+typography, keyboard, sign-in, accessibility.*
+
+### What was built
+
+**1. Motion language.** One curve (`cubic-bezier(0.16, 1, 0.3, 1)`) and three durations
+(150 / 250 / 400) as CSS tokens. Page content fades up 8px on enter; `.stagger` assembles
+children 40ms apart. `prefers-reduced-motion` kills the lot.
+
+**2. Numbers.** `CountUp` on every numeric `FigureTile` (800ms eased). Quorum / coverage
+arcs already drew on mount; deadline strips now fill from the left. Value changes pulse
+the cell briefly.
+
+**3. Loading.** Route skeleton shimmer slowed to 2s, lower contrast.
+
+**4. Compliance Clock — hero.** Redesigned as a vertical timeline with a filled progress
+spine, state dots (met / running / not started / breached) each with icon + label, live
+countdown on the active milestone, urgency colour (emerald → amber ≤14d → red), slow
+breach pulse, and statutory basis on hover. Moved above the workflow tracker; left rail
+widened to give it room.
+
+**5. Depth.** Three elevation levels (`--elev-border` + soft shadows). Interactive tiles
+lift 2px on hover. Sliding emerald nav indicator. 2% noise texture over the shell.
+
+**6. Feedback.** Toasts already stacked; Undo actions now hold for 8s with a matching
+progress hairline. `.btn.busy` shows an inline spinner instead of a mute disabled state.
+`pushUndo` helper added.
+
+**7. Typography.** Body line-height 1.6. Tabular nums and mono for IDs/clocks already in
+place; six-size scale preserved.
+
+**8. Keyboard.** `g c` / `g b` / `g r`, `?` shortcut sheet, `j`/`k` on `[data-nav-list]`
+(cause list wired). Focus rings were already 2px emerald at 2px offset.
+
+**9. Sign-in.** One-line permission blurb under each demo role; staggered entrance;
+selection lifts the card, dims the rest, then transitions into the app.
+
+**10. Accessibility.** Secondary/tertiary text lightened for AA on the dark canvas.
+Clock and toasts use `aria-live`. Colour never alone — every clock state has icon + word.
+
+### Deviations
+
+- **Optimistic workflow rollback** is not simulated — there is no failing backend. State
+  already updates instantly; a visible rollback would be theatre without a failure mode.
+- **Before/after screenshots** are for the human to capture in the running app; the craft
+  changes are structural and visible on every dashboard and case record.
