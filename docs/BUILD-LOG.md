@@ -661,3 +661,39 @@ Clocks rewind and fill, evidence accumulates, workflow advances.
   shown is today's. Composition changes would need dated membership events on the log.
 - **Document version supersession** filters by upload date; there is no separate
   version timeline beyond what fixtures already carry (`v1` / `v2` / `v3` labels).
+
+---
+
+## Phase W4 — Clock Cascade
+
+*PROMPT W4 from `docs/CRITIQUE.md`. What-if simulator: one scheduling change ripples
+through every statutory deadline.*
+
+### What was built
+
+**1. Entry.** "Model a change" on the case left rail (under the Compliance Clock) and on
+Proceedings — both the tab header and each scheduled sitting row.
+
+**2. Controls.** Sitting shift (days), evidence verification delay, extra reply days, and
+a committee unavailable date range.
+
+**3. Side-by-side cascade.** Current projection vs projected outcome for notice, reply,
+evidence, next sitting, inquiry, report, employer action, and appeal. Connecting lines
+carry the delta. Emerald / amber / red severity with plain-language overshoot copy.
+
+**4. Headline.** One sentence at the top — breach ("…would require a recorded reason") or
+comfort ("…N days to spare"). Recomputes live as inputs change.
+
+**5. Motion.** Dates roll, lines redraw, severity colours transition (~300ms); a breach
+row gets one restrained red pulse. Reduced-motion respected.
+
+**6. Commit.** "Apply this change" shifts upcoming sittings via `sittingDateOverrides` on
+the flow and files an advisory note. "Save as a note" attaches the projection without
+moving dates (concern flag when the inquiry would breach).
+
+### Deviations
+
+- **Apply** moves sittings (and records the note); evidence/reply delays are modelled in
+  the projection and saved in the note, but do not rewrite statutory `replyDue` on the
+  Case fixture — those windows are fixed by law from filing/notice.
+- Calendar views outside the case workspace do not yet read `sittingDateOverrides`.

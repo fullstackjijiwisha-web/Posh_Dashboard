@@ -23,10 +23,12 @@ import {
   type ReactNode,
 } from 'react'
 import { CASES } from '../data/cases'
+import { hearingsFor } from '../data/caseDetail'
 import { USER_BY_ROLE, userById } from '../data/users'
 import { ROLE_LABEL, type Case, type CaseStage, type Role } from '../data/types'
 import { casesVisibleTo, useRole } from '../role-context'
 import { dateNDaysAgo } from '../data/statutory'
+import { addDays, format, parseISO } from 'date-fns'
 import { actionsFor, transitionById, type WorkflowTransition } from './machine'
 import {
   computeHash,
@@ -639,6 +641,11 @@ export interface WorkflowState {
   createAdminAccount: (input: { name: string; email: string; department: string }) => void
   addAdvisoryNote: (caseId: string, text: string, concern: boolean) => void
   recordPackExport: (caseId: string, meta: { rootHash: string; redacted: boolean; pages: number; recipient: string }) => void
+  /**
+   * Clock Cascade — commit a sitting shift by writing date overrides (and shifting
+   * any in-session flow hearings). Does not rewrite fixture tables.
+   */
+  applySittingShift: (caseId: string, shiftDays: number, hearingIds: string[]) => void
 
   /* --- Evidence (Phase 5) --- */
   /** Moves an item's admission state. A refusal requires a reason. */
@@ -1294,6 +1301,42 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     [actorId, actorName, actorRole, notify],
   )
 
+  const applySittingShift = useCallback((caseId: string, shiftDays: number, hearingIds: string[]) => {
+    if (!shiftDays || !hearingIds.length) return
+    setState((prev) => {
+      const flow = prev.flows[caseId]
+      if (!flow) return prev
+      const fixtures = hearingsFor(caseId)
+      const overrides: Record<string, string> = { ...(flow.sittingDateOverrides ?? {}) }
+
+      const shiftIso = (base: string) => {
+        const day = format(addDays(parseISO(base.slice(0, 10)), shiftDays), 'yyyy-MM-dd')
+        const time = base.includes('T') ? base.slice(10) : 'T11:00:00'
+        return day + time
+      }
+
+      for (const id of hearingIds) {
+        const existing = overrides[id]
+        const flowH = flow.hearings.find((h) => h.id === id)
+        const fixture = fixtures.find((h) => h.id === id)
+        const base = existing ?? flowH?.at ?? fixture?.at
+        if (base) overrides[id] = shiftIso(base)
+      }
+
+      const hearings = flow.hearings.map((h) =>
+        hearingIds.includes(h.id) ? { ...h, at: shiftIso(h.at) } : h,
+      )
+
+      return {
+        ...prev,
+        flows: {
+          ...prev.flows,
+          [caseId]: { ...flow, hearings, sittingDateOverrides: overrides },
+        },
+      }
+    })
+  }, [])
+
   /**
    * Records that a Defensibility Pack was generated.
    *
@@ -1803,6 +1846,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       recordDecision,
       createAdminAccount,
       addAdvisoryNote,
+      applySittingShift,
       recordPackExport,
       setEvidenceState,
       logEvidenceAccess,
@@ -1840,6 +1884,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       recordDecision,
       createAdminAccount,
       addAdvisoryNote,
+      applySittingShift,
       recordPackExport,
       setEvidenceState,
       logEvidenceAccess,

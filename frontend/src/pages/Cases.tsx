@@ -11,6 +11,7 @@ import {
   Copy,
   Download,
   FileText,
+  GitBranch,
   NotebookPen,
   Send,
   ShieldCheck,
@@ -51,6 +52,7 @@ import { IssueDialog } from '../components/documents/IssueDialog'
 import { MinutesEditor } from '../components/documents/MinutesEditor'
 import { TimeMachineBar } from '../components/timemachine/TimeMachineBar'
 import { useTimeMachine } from '../lib/timemachine/useTimeMachine'
+import { ClockCascadeDialog } from '../components/cascade/ClockCascadeDialog'
 import { shortHash } from '../lib/defensibility/hash'
 import './CaseWorkspace.css'
 import '../components/documents/Documents.css'
@@ -202,6 +204,8 @@ export function CasesPage() {
 
   const [selectedEvidence, setSelectedEvidence] = useState<string | null>(null)
   const [packOpen, setPackOpen] = useState(false)
+  const [cascadeOpen, setCascadeOpen] = useState(false)
+  const [cascadeHearingId, setCascadeHearingId] = useState<string | null>(null)
 
   // Command palette "Generate Defensibility Pack" lands here with ?pack=1.
   useEffect(() => {
@@ -270,8 +274,14 @@ export function CasesPage() {
     [liveEvidence, tm.view.evidenceIds],
   )
   const hearings = useMemo(
-    () => liveHearings.filter((h) => tm.view.hearingIds.has(h.id)),
-    [liveHearings, tm.view.hearingIds],
+    () =>
+      liveHearings
+        .filter((h) => tm.view.hearingIds.has(h.id))
+        .map((h) => {
+          const override = flow?.sittingDateOverrides?.[h.id]
+          return override ? { ...h, at: override } : h
+        }),
+    [liveHearings, tm.view.hearingIds, flow?.sittingDateOverrides],
   )
   const documents = useMemo(
     () => liveDocuments.filter((d) => tm.view.documentIds.has(d.id)),
@@ -455,6 +465,20 @@ export function CasesPage() {
               record={viewRecord}
               asOf={isHistorical ? tm.view.asOf : undefined}
             />
+            {!isHistorical && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ width: '100%', marginTop: 8 }}
+                onClick={() => {
+                  setCascadeHearingId(null)
+                  setCascadeOpen(true)
+                }}
+              >
+                <GitBranch {...ICON_SM} />
+                Model a change
+              </button>
+            )}
           </div>
 
           {/* ═══ Workflow position ═══ */}
@@ -776,10 +800,25 @@ export function CasesPage() {
             <div className="cw-panel rise">
               <div className="cw-panel-head">
                 <h2 className="cw-panel-title">Proceedings</h2>
-                <button type="button" className="btn btn-secondary">
-                  <Plus {...ICON_SM} />
-                  Schedule hearing
-                </button>
+                <div className="flex items-center gap-2">
+                  {!isHistorical && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        setCascadeHearingId(null)
+                        setCascadeOpen(true)
+                      }}
+                    >
+                      <GitBranch {...ICON_SM} />
+                      Model a change
+                    </button>
+                  )}
+                  <button type="button" className="btn btn-secondary">
+                    <Plus {...ICON_SM} />
+                    Schedule hearing
+                  </button>
+                </div>
               </div>
               <div className="table-wrap" style={{ maxHeight: 'none' }}>
                 <table className="data" style={{ minWidth: 860 }}>
@@ -789,7 +828,7 @@ export function CasesPage() {
                     <col style={{ width: 160 }} />
                     <col style={{ width: 200 }} />
                     <col style={{ width: 160 }} />
-                    <col style={{ width: 90 }} />
+                    <col style={{ width: 140 }} />
                   </colgroup>
                   <thead>
                     <tr>
@@ -859,9 +898,25 @@ export function CasesPage() {
                             })()}
                           </td>
                           <td>
-                            <span className={`badge ${h.status === 'Completed' ? 'badge-completed' : h.status === 'Scheduled' ? 'badge-scheduled' : 'badge-adjourned'}`}>
-                              {h.status}
-                            </span>
+                            <div className="flex flex-col gap-1" style={{ alignItems: 'flex-start' }}>
+                              <span className={`badge ${h.status === 'Completed' ? 'badge-completed' : h.status === 'Scheduled' ? 'badge-scheduled' : 'badge-adjourned'}`}>
+                                {h.status}
+                              </span>
+                              {h.status === 'Scheduled' && !isHistorical && (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  title="Model how slipping this sitting moves the clocks"
+                                  onClick={() => {
+                                    setCascadeHearingId(h.id)
+                                    setCascadeOpen(true)
+                                  }}
+                                >
+                                  <GitBranch {...ICON_SM} />
+                                  Model a change
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       )
@@ -1294,6 +1349,18 @@ export function CasesPage() {
           onGenerated={(meta) =>
             recordPackExport(record.id, { ...meta, recipient: '' })
           }
+        />
+      )}
+
+      {cascadeOpen && (
+        <ClockCascadeDialog
+          record={record}
+          flow={flow}
+          focusHearingId={cascadeHearingId}
+          onClose={() => {
+            setCascadeOpen(false)
+            setCascadeHearingId(null)
+          }}
         />
       )}
 

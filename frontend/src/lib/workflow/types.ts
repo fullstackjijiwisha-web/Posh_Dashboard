@@ -576,6 +576,11 @@ export interface CaseFlow {
   packExports: PackExport[]
   documents: GeneratedDocument[]
   minutes: HearingMinutes[]
+  /**
+   * Clock Cascade — applied sitting date overrides (hearing id → ISO datetime).
+   * Lets "Apply this change" move listed sittings without mutating fixtures.
+   */
+  sittingDateOverrides?: Record<string, string>
   /** True for cases raised through the in-app complaint form during this session. */
   raisedInSession: boolean
 }
