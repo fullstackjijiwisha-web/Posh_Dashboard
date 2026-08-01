@@ -1,14 +1,15 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import { CASES } from './data/cases'
 import { USER_BY_ROLE } from './data/users'
-import type { Case, Permission, Role, User } from './data/types'
+import { ROLES, type Case, type Permission, type Role, type User } from './data/types'
 
 /**
  * Demo authentication.
  *
- * State is held in memory ONLY — deliberately not localStorage. Refreshing resets the
- * prototype to a clean signed-out state, which is the behaviour we want when handing
- * the laptop to someone mid-demo.
+ * The signed-in role persists to localStorage so a direct URL survives a reload. It used
+ * to be memory-only, which reset the prototype on refresh — pleasant when handing over a
+ * laptop, but it made every deep link bounce to the sign-in screen, and "send me that
+ * case" is the commonest action in an enterprise tool. Signing out clears it.
  *
  * The permission matrix below is the substance of the demo, not decoration. The two
  * rules that carry legal weight:
@@ -119,9 +120,55 @@ export interface RoleState {
 
 const RoleContext = createContext<RoleState | null>(null)
 
+/** Where the signed-in role is kept between reloads. */
+const SESSION_KEY = 'sentinel.session.role'
+
+/**
+ * Reads the persisted role synchronously, as a `useState` initialiser.
+ *
+ * It has to be synchronous. Restoring in an effect leaves one frame where the role is
+ * null, and `AppLayout` redirects to the sign-in screen on exactly that condition — so a
+ * deep link would bounce to `/` and lose the route before the effect ever ran.
+ */
+function readStoredRole(): Role | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(SESSION_KEY)
+    return raw && ROLES.includes(raw as Role) ? (raw as Role) : null
+  } catch {
+    return null
+  }
+}
+
 export function RoleProvider({ children }: { children: ReactNode }) {
-  // In memory only. A refresh returns the demo to the sign-in screen by design.
-  const [currentRole, setCurrentRole] = useState<Role | null>(null)
+  /**
+   * Persisted, not in memory.
+   *
+   * This reverses the original design, which deliberately kept sign-in in memory so a
+   * refresh returned to a clean sign-out state. That behaviour made deep linking
+   * impossible — every direct URL bounced to sign-in — and sharing a case link is the
+   * commonest action in an enterprise tool. Signing out still clears it.
+   */
+  const [currentRole, setCurrentRole] = useState<Role | null>(readStoredRole)
+
+  const setRole = useCallback((role: Role) => {
+    setCurrentRole(role)
+    try {
+      window.localStorage.setItem(SESSION_KEY, role)
+    } catch {
+      // Private browsing or a full quota. The session still works, it just will not
+      // survive a reload — which is the old behaviour, so nothing is worse than before.
+    }
+  }, [])
+
+  const signOut = useCallback(() => {
+    setCurrentRole(null)
+    try {
+      window.localStorage.removeItem(SESSION_KEY)
+    } catch {
+      /* nothing to clean up */
+    }
+  }, [])
 
   const currentUser = currentRole ? USER_BY_ROLE[currentRole] : null
 
@@ -142,8 +189,8 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     return {
       currentUser,
       currentRole,
-      setRole: setCurrentRole,
-      signOut: () => setCurrentRole(null),
+      setRole,
+      signOut,
       can,
       visibleCases,
       canOpenCase: (caseId) => visibleIds.has(caseId),
@@ -154,7 +201,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         return party.actualName
       },
     }
-  }, [currentUser, currentRole, can, visibleCases])
+  }, [currentUser, currentRole, can, visibleCases, setRole, signOut])
 
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>
 }

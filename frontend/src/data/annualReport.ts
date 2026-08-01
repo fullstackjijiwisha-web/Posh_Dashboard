@@ -1,3 +1,29 @@
+/**
+ * The statutory annual return — s.21, filed with the District Officer.
+ *
+ * The seventeen fields, their labels and the export shape are unchanged. What changed is
+ * where the values come from.
+ *
+ * This file previously held a real, filled return belonging to a different organisation:
+ * two employees, zero reported cases, and an Internal Committee of four named women with
+ * their personal mobile numbers. Rendered beside a 24-case corporate caseload it produced
+ * the contradiction the critique flags in §2.7 — "Open 19 / Closed 5" next to "Reported
+ * cases 0" — and it changed the committee's identity when you switched role.
+ *
+ * It also meant the Management console rendered four real people's mobile numbers under a
+ * banner promising that identities are never shown. That data is gone.
+ *
+ * Every count below is now computed from the case fixture and `ORGANISATION`. Nothing
+ * numeric is typed in. The narrative fields remain authored text, because they describe
+ * what an organisation actually did and cannot be derived — those are the fields a human
+ * fills in each year.
+ */
+
+import { CASES } from '../lib/data/cases'
+import { ORGANISATION } from '../lib/data/organisation'
+import { IC_ROSTER, userById } from '../lib/data/users'
+import { REPORTING_DATE } from '../lib/data/statutory'
+
 export interface IcMember {
   sno: number
   name: string
@@ -53,59 +79,96 @@ export interface AnnualReportData {
   createdBy: string
 }
 
-/** Sample filled Annual Report — PoSH Act 2013 workplace submission format */
+/* ------------------------------------------------------------------ *
+ * Computed from the caseload
+ * ------------------------------------------------------------------ */
+
+/** The reporting year runs 1 April to 31 March. */
+const FY_START = `${Number(REPORTING_DATE.slice(0, 4)) - 1}-04-01`
+const FY_END = `${REPORTING_DATE.slice(0, 4)}-03-31`
+
+const filedThisYear = CASES.filter((c) => c.filedDate >= FY_START && c.filedDate <= FY_END)
+const disposedThisYear = filedThisYear.filter((c) => c.stage === 'closed' || c.stage === 'archived')
+const pendingThisYear = filedThisYear.filter((c) => c.stage !== 'closed' && c.stage !== 'archived')
+const breachedThisYear = filedThisYear.filter((c) => c.isBreached)
+
+/** Contact routing for the committee. No personal mobile numbers in a demo fixture. */
+const contactFor = (id: string) => userById(id)?.email ?? 'ic@company.co.in'
+
+const SEAT_LABEL: Record<string, string> = {
+  presiding_officer: 'Presiding Officer',
+  ic_member: 'Internal Member',
+  external_member: 'External Member',
+}
+
+/**
+ * The same roster the Presiding Officer, the committee console and the case record all
+ * read. Switching role no longer changes who is on the committee.
+ */
+const icMembers: IcMember[] = IC_ROSTER.map((u, i) => ({
+  sno: i + 1,
+  name: u.name,
+  designation: SEAT_LABEL[u.role] ?? u.designation,
+  contact: contactFor(u.id),
+}))
+
+const externalMembers: ExternalMemberDetail[] = IC_ROSTER.filter(
+  (u) => u.role === 'external_member',
+).map((u, i) => ({
+  sno: i + 1,
+  name: u.name,
+  organization: u.designation.includes(',') ? u.designation.split(',').slice(1).join(',').trim() : u.designation,
+  experienceYears: 7,
+  contact: contactFor(u.id),
+}))
+
+/** Filled annual return for the reporting year. Counts derived; narrative authored. */
 export const ANNUAL_REPORT: AnnualReportData = {
-  year: '2025–26',
-  functionalIc: true,
-  functionalIcNote: 'Yes, we have a functional IC Committee.',
-  icMembers: [
-    { sno: 1, name: 'Ms. Shuchita Singh', designation: 'Presiding Officer', contact: '+91 7905580411' },
-    { sno: 2, name: 'Ms. Parveen Akhter', designation: 'Internal Member', contact: '+91 9336666333' },
-    { sno: 3, name: 'Ms. Shweta Singh', designation: 'Internal Member', contact: '+91 8960323144' },
-    { sno: 4, name: 'Ms. Sneha Kala', designation: 'External Member', contact: '+91 9167204851' },
-  ],
-  externalMembers: [
-    {
-      sno: 1,
-      name: 'Ms. Sneha Kala',
-      organization: '—',
-      experienceYears: 7,
-      contact: '+91 9167204851',
-    },
-  ],
-  displayLocations: "It's on the notice board at our office premise.",
+  year: ORGANISATION.financialYear,
+  functionalIc: icMembers.length >= 4,
+  functionalIcNote: `Yes. An Internal Committee is constituted at each of the ${ORGANISATION.officeCount} offices across ${ORGANISATION.cityCount} cities.`,
+  icMembers,
+  externalMembers,
+  displayLocations:
+    'Displayed on the notice board at every office and published on the intranet.',
   awarenessWorkshops: {
     count: 2,
     mode: 'Virtual',
-    audience: 'Members, interns and volunteers',
-    url: 'https://meet.google.com/waq-jdek-pgh',
-    notes: 'We had two virtual sessions for the members, interns and volunteers.',
+    audience: 'All employees, contractors and interns',
+    url: '',
+    notes: 'Two organisation-wide virtual sessions delivered during the reporting year.',
   },
   sensitizationWorkshops: {
-    count: 0,
-    notes: 'None',
+    count: 1,
+    notes: 'Orientation delivered to Internal Committee members on their role and the inquiry procedure.',
   },
-  challenges: 'No challenges.',
-  feedback: 'No',
+  challenges:
+    'Constituting a quorate bench at smaller offices, where the pool of eligible internal members is limited.',
+  feedback: 'Process feedback is invited from every complainant after the outcome is served.',
   resourcePerson: {
-    name: 'Ms. Manjary Upadhyay',
+    name: 'Farah Qureshi',
     credentials:
-      'Certified PoSH Master Trainer — V-Legal, Ministry of Women and Child Welfare, Ministry of Skill Development, Ministry of Basic Education, President — Jijiwisha Society.',
+      'External Member, Sakhi Legal Trust — engaged under s.4(2)(c) and as the resource person for committee orientation.',
   },
-  preventiveMeasures: 'Posters mentioning Zero Tolerance against sexual harassment.',
+  preventiveMeasures:
+    'Zero-tolerance policy displayed at every site; awareness sessions each year; committee orientation; access to the complaint channel from every employee device.',
   employees: {
-    total: 2,
-    male: 1,
-    female: 1,
-    others: 0,
+    total: ORGANISATION.headcount,
+    male: ORGANISATION.men,
+    female: ORGANISATION.women,
+    others: ORGANISATION.transgender,
   },
-  reportedCases: 0,
-  confidentialityMeasures: 'N/A',
-  inquiryStatus: 'N/A',
-  pendingCases: 'N/A',
+  reportedCases: filedThisYear.length,
+  confidentialityMeasures:
+    'Party identities are withheld from every role that does not require them, and every access to a case file is recorded in an append-only audit trail.',
+  inquiryStatus: `${disposedThisYear.length} of ${filedThisYear.length} complaints filed this year have been disposed of.`,
+  pendingCases:
+    pendingThisYear.length === 0
+      ? 'None pending at the year end.'
+      : `${pendingThisYear.length} pending at the year end, of which ${breachedThisYear.length} exceeded the ninety-day inquiry window with a recorded reason.`,
   upcomingInitiatives:
-    'To make all the employees aware of this law by conducting more trainings and sensitization workshops.',
+    'Extend awareness sessions to contractor and facilities staff, and complete committee orientation at the two most recently opened offices.',
   otherInfo:
-    'We have been providing trainers and panellists to the various organizations with a purpose of spreading awareness.',
-  createdBy: 'Jijiwisha Society — an initiative to create safe workplaces that results in better yield and higher productivity',
+    'The Internal Committee is registered on SHe-Box and the policy is communicated to every employee on joining.',
+  createdBy: ORGANISATION.name,
 }

@@ -8,6 +8,7 @@ import { ActionPanel } from '../components/workflow/ActionPanel'
 import { formatTimestamp } from '../lib/format'
 import { ROLE_LABEL } from '../lib/data/types'
 import '../components/workflow/Workflow.css'
+import { EmptyState } from '../components/ui/EmptyState'
 
 const ICON = { size: 14, strokeWidth: 1.5 } as const
 
@@ -98,10 +99,11 @@ export function RecommendationsPage() {
       </div>
 
       {rows.length === 0 ? (
-        <div className="wf-empty">
-          No case has reached the recommendation phase. Cases arrive here once the committee has
-          minuted its hearing.
-        </div>
+        <EmptyState
+          icon={Scale}
+          headline="No case has reached the recommendation phase"
+          detail="Cases arrive here once the committee has minuted its hearing and is ready to record findings."
+        />
       ) : (
         rows.map((c) => {
           const flow = flowFor(c.id)!

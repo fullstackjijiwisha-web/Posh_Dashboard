@@ -14,6 +14,7 @@ import { actorName } from '../lib/data/users'
 import '../components/workflow/Workflow.css'
 import '../components/workflow/EmployeePortal.css'
 import '../components/workflow/Dials.css'
+import { EmptyState } from '../components/ui/EmptyState'
 
 type View = 'Board' | 'List'
 
@@ -134,7 +135,11 @@ export function StatutoryWorkspacePage() {
       </div>
 
       {rows.length === 0 ? (
-        <div className="wf-empty">No case matches those filters.</div>
+        <EmptyState
+          icon={Search}
+          headline="No case matches those filters"
+          detail="Clear the search, widen the department, or switch the scope to include concluded cases."
+        />
       ) : view === 'Board' ? (
         <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
           <div style={{ display: 'flex', gap: 'var(--space-4)', minWidth: 'min-content' }}>

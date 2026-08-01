@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { CheckCircle2, ScrollText, XCircle } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { CheckCircle2, ScrollText, X, XCircle } from 'lucide-react'
 import { useWorkflow } from '../lib/workflow/store'
 import { STAGE_META, isWorkflowTerminal } from '../lib/workflow/types'
 import { QuorumRing, QuorumList } from '../components/workflow/Dials'
@@ -12,8 +12,29 @@ import { actorName } from '../lib/data/users'
 import '../components/workflow/Workflow.css'
 import '../components/workflow/EmployeePortal.css'
 import '../components/workflow/Dials.css'
+import { EmptyState } from '../components/ui/EmptyState'
 
 type Scope = 'Ahead' | 'Held' | 'All'
+
+/**
+ * Sitting types, abbreviated deliberately rather than clipped.
+ *
+ * The 64px date cell used to render `type.slice(0, 10)`, which turned "Deliberation"
+ * into "Deliberati" — the truncation the critique caught at 1488px. A hard character
+ * slice cannot know where a word ends, so the type carries its own short form and the
+ * cell keeps a `title` with the full text.
+ */
+const SITTING_SHORT: Record<string, string> = {
+  Preliminary: 'Prelim.',
+  Deposition: 'Deposit.',
+  'Cross examination': 'Cross-ex.',
+  Deliberation: 'Delib.',
+  Final: 'Final',
+  'In person': 'In person',
+  'Video conference': 'Video',
+}
+
+const shortSittingType = (type: string) => SITTING_SHORT[type] ?? type
 
 /**
  * The cause list.
@@ -23,10 +44,51 @@ type Scope = 'Ahead' | 'Held' | 'All'
  * test, because "is this sitting properly constituted" is a question that has to be
  * answered before the sitting, not discovered afterwards.
  */
+/**
+ * Filters the bench KPI cards can hand over in the URL.
+ *
+ * URL-borne rather than component state so the cards compose with deep linking: a
+ * Presiding Officer can send "the four sittings within 14 days of the limit" as a link,
+ * and it survives a reload.
+ */
+const CAUSE_FILTERS = {
+  breached: {
+    label: 'Past the 90-day limit',
+    test: (s: { breached: boolean }) => s.breached,
+  },
+  'near-limit': {
+    label: 'Within 14 days of the limit',
+    test: (s: { breached: boolean; daysRemaining: number }) => !s.breached && s.daysRemaining <= 14,
+  },
+  'bench-short': {
+    label: 'Bench would sit short',
+    test: (s: { attendees: string[] }) => !allMet(sittingQuorumTests(s.attendees)),
+  },
+} as const
+
+export type CauseFilterKey = keyof typeof CAUSE_FILTERS
+
 export function CauseListPage() {
   const { myAssignedCases, flowFor } = useWorkflow()
-  const [scope, setScope] = useState<Scope>('Ahead')
+  const [params, setParams] = useSearchParams()
   const [open, setOpen] = useState<string | null>(null)
+
+  const filterKey = params.get('filter') as CauseFilterKey | null
+  const activeFilter = filterKey && filterKey in CAUSE_FILTERS ? CAUSE_FILTERS[filterKey] : null
+
+  // Arriving with a filter means the reader came from a KPI card about something at
+  // risk, which is never limited to sittings still ahead.
+  const scope: Scope = (params.get('scope') as Scope) ?? (activeFilter ? 'All' : 'Ahead')
+  const setScope = (s: Scope) => {
+    const next = new URLSearchParams(params)
+    next.set('scope', s)
+    setParams(next, { replace: true })
+  }
+  const clearFilter = () => {
+    const next = new URLSearchParams(params)
+    next.delete('filter')
+    setParams(next, { replace: true })
+  }
 
   const today = dateNDaysAgo(0)
 
@@ -69,7 +131,8 @@ export function CauseListPage() {
 
   const ahead = all.filter((s) => s.status === 'Scheduled' && s.at.slice(0, 10) >= today)
   const held = all.filter((s) => !(s.status === 'Scheduled' && s.at.slice(0, 10) >= today))
-  const rows = scope === 'Ahead' ? ahead : scope === 'Held' ? held : all
+  const inScope = scope === 'Ahead' ? ahead : scope === 'Held' ? held : all
+  const rows = activeFilter ? inScope.filter(activeFilter.test) : inScope
 
   // Grouped by date, the way a cause list is actually posted.
   const byDate = rows.reduce<Record<string, typeof rows>>((acc, s) => {
@@ -98,7 +161,20 @@ export function CauseListPage() {
         </div>
       </div>
 
-      {defective > 0 && scope !== 'Held' && (
+      {/* The filter a KPI card handed over, shown as a chip that can be removed. */}
+      {activeFilter && (
+        <div className="filter-chip-row">
+          <span className="filter-chip">
+            {activeFilter.label}
+            <span className="filter-chip-count">{rows.length}</span>
+            <button type="button" onClick={clearFilter} aria-label={`Remove filter: ${activeFilter.label}`}>
+              <X size={12} strokeWidth={2} />
+            </button>
+          </span>
+        </div>
+      )}
+
+      {defective > 0 && scope !== 'Held' && !activeFilter && (
         <div className="wf-blocked" style={{ borderColor: 'rgba(245,158,11,0.4)' }}>
           <XCircle size={14} strokeWidth={1.5} style={{ color: 'var(--color-warning)', marginTop: 1, flexShrink: 0 }} />
           <span>
@@ -111,7 +187,24 @@ export function CauseListPage() {
       )}
 
       {Object.keys(byDate).length === 0 ? (
-        <div className="wf-empty">Nothing listed in this view.</div>
+        <EmptyState
+          icon={ScrollText}
+          headline={activeFilter ? `No sitting matches “${activeFilter.label}”` : scope === 'Ahead' ? 'No sitting is listed before you' : 'Nothing in this view'}
+          detail={
+            activeFilter
+              ? 'Nothing on your cause list meets that condition — which is the answer you wanted.'
+              : scope === 'Ahead'
+                ? 'Sittings appear here once a case reaches the hearing stage and a date is listed.'
+                : 'Change the scope above to see sittings already held, or the full list.'
+          }
+          action={
+            activeFilter
+              ? { label: 'Clear the filter', onClick: clearFilter }
+              : scope === 'Ahead'
+                ? undefined
+                : { label: 'Show all sittings', onClick: () => setScope('All') }
+          }
+        />
       ) : (
         Object.entries(byDate).map(([date, sittings]) => (
           <section key={date} className="ep-card">
@@ -147,7 +240,9 @@ export function CauseListPage() {
                     >
                       <div className="bench-time">
                         <div className="bench-hour">{s.at.slice(11, 16)}</div>
-                        <div className="bench-date">{s.type.slice(0, 10)}</div>
+                        <div className="bench-date" title={s.type}>
+                          {shortSittingType(s.type)}
+                        </div>
                       </div>
                       <div style={{ minWidth: 0 }}>
                         <div className="ep-hearing-title">{s.title}</div>

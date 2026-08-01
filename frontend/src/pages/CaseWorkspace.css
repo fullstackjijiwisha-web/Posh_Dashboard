@@ -389,11 +389,52 @@
 }
 
 /* Underline tab bar */
+/* The tab bar scrolled already, but nothing said so — at narrow widths the last tab
+   simply looked clipped. The wrapper adds a fade at whichever edge has more content,
+   which is the only honest signal that there is more to reach. */
+.cw-tabs-wrap {
+  position: relative;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cw-tabs-wrap::before,
+.cw-tabs-wrap::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 1px;
+  width: 32px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--ease);
+  z-index: 1;
+}
+
+.cw-tabs-wrap::before {
+  left: 0;
+  background: linear-gradient(90deg, var(--color-background), transparent);
+}
+
+.cw-tabs-wrap::after {
+  right: 0;
+  background: linear-gradient(270deg, var(--color-background), transparent);
+}
+
+.cw-tabs-wrap[data-at-start="false"]::before { opacity: 1; }
+.cw-tabs-wrap[data-at-end="false"]::after { opacity: 1; }
+
 .cw-tabs {
   display: flex;
   gap: 0;
-  border-bottom: 1px solid var(--color-border);
   overflow-x: auto;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+}
+
+.cw-tabs::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cw-tabs { scroll-behavior: auto; }
 }
 
 .cw-tab {

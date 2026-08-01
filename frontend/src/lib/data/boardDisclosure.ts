@@ -2,7 +2,18 @@
  * Board's Report disclosure figures — Rule 8(5), Companies (Accounts) Rules 2014
  * as amended by the Companies (Accounts) Second Amendment Rules 2025
  * (effective 14 July 2025).
+ *
+ * The current year's workforce is derived from `ORGANISATION` rather than restated here.
+ * These figures were already the most defensible in the app — `sourceCaseCount` matches
+ * the case fixture — which is why they were chosen as the anchor when the three competing
+ * headcounts were reconciled. Deriving them keeps that true rather than leaving it a
+ * coincidence that has to be maintained by hand.
+ *
+ * The prior year stays as authored history: it is a filed disclosure about a workforce
+ * that no longer exists, and nothing in the app should recompute it.
  */
+
+import { ORGANISATION, pctOfWorkforce } from './organisation'
 
 export interface BoardDisclosureFy {
   id: string
@@ -38,10 +49,14 @@ export const BOARD_DISCLOSURE_YEARS: BoardDisclosureFy[] = [
       pendingYearEnd: 3,
     },
     workforce: [
-      { category: 'Women', number: 1847, pct: 41.2 },
-      { category: 'Men', number: 2591, pct: 57.8 },
-      { category: 'Transgender persons', number: 44, pct: 1.0 },
-      { category: 'Total', number: 4482, pct: 100, isTotal: true },
+      { category: 'Women', number: ORGANISATION.women, pct: pctOfWorkforce(ORGANISATION.women) },
+      { category: 'Men', number: ORGANISATION.men, pct: pctOfWorkforce(ORGANISATION.men) },
+      {
+        category: 'Transgender persons',
+        number: ORGANISATION.transgender,
+        pct: pctOfWorkforce(ORGANISATION.transgender),
+      },
+      { category: 'Total', number: ORGANISATION.headcount, pct: 100, isTotal: true },
     ],
     confirmations: [
       'Internal Committee constituted in accordance with Section 4',

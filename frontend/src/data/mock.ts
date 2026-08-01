@@ -6,6 +6,8 @@
  * conventions are applied in exactly one place.
  */
 
+import { ORGANISATION } from '../lib/data/organisation'
+
 export type Role = 'admin' | 'hr' | 'management' | 'ic'
 
 export interface User {
@@ -194,16 +196,23 @@ export const ACTIVITY: FeedEvent[] = [
 ]
 
 /**
- * Organisation-wide compliance figures. Single source of truth — the management
- * dashboard KPI and the annual report both read from here, so the two screens
- * cannot quote different training coverage.
+ * Organisation-wide compliance figures.
+ *
+ * This block used to declare itself the single source of truth while hardcoding 2,450
+ * employees — against a Board's Report disclosing 4,482 and an annual return saying 2.
+ * Headcount and coverage now come from `ORGANISATION`, which sums them from the office
+ * list, so the three can no longer disagree.
  */
 export const COMPLIANCE = {
   score: 78,
-  totalEmployees: 2450,
-  trainingCoveragePct: 94,
+  get totalEmployees() {
+    return ORGANISATION.headcount
+  },
+  get trainingCoveragePct() {
+    return ORGANISATION.trainingCoveragePct
+  },
   get trainedEmployees() {
-    return Math.round((this.totalEmployees * this.trainingCoveragePct) / 100)
+    return ORGANISATION.trainedEmployees
   },
   breakdown: [
     { label: 'Policy adherence', value: 92 },

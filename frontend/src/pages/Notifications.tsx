@@ -6,6 +6,7 @@ import { useRole } from '../lib/role-context'
 import { ROLE_LABEL } from '../lib/data/types'
 import { formatTimestamp } from '../lib/format'
 import '../components/workflow/Workflow.css'
+import { EmptyState } from '../components/ui/EmptyState'
 
 const ICON = { size: 14, strokeWidth: 1.5 } as const
 
@@ -44,13 +45,11 @@ export function NotificationsPage() {
       </div>
 
       {myNotifications.length === 0 ? (
-        <div className="wf-empty">
-          <BellOff size={20} strokeWidth={1.5} style={{ opacity: 0.5 }} />
-          <div style={{ marginTop: 12 }}>
-            Nothing addressed to your role yet. Notices appear here as cases move through the
-            lifecycle.
-          </div>
-        </div>
+        <EmptyState
+          icon={BellOff}
+          headline="Nothing addressed to your role"
+          detail="Notices appear here as cases move between custodians — a board assigned, evidence requested, a decision recorded."
+        />
       ) : (
         <div className="wf-list">
           {myNotifications.map((n) => (

@@ -9,6 +9,7 @@ import { AdvisoryPanel } from '../components/workflow/AdvisoryPanel'
 import { formatTimestamp } from '../lib/format'
 import '../components/workflow/Workflow.css'
 import '../components/workflow/EmployeePortal.css'
+import { EmptyState } from '../components/ui/EmptyState'
 
 const ICON = { size: 14, strokeWidth: 1.5 } as const
 
@@ -91,11 +92,19 @@ export function ICRecommendationsPage() {
       </div>
 
       {shown.length === 0 ? (
-        <div className="wf-empty">
-          {tab === 'Awaiting you'
-            ? 'Nothing is waiting on the committee. Cases arrive here once a sitting has been minuted.'
-            : 'No recommendation has been issued yet on any case you sit on.'}
-        </div>
+        <EmptyState
+          icon={Scale}
+          headline={
+            tab === 'Awaiting you'
+              ? 'Nothing awaiting your recommendation'
+              : 'No recommendation issued yet'
+          }
+          detail={
+            tab === 'Awaiting you'
+              ? 'A case appears here once its hearing is minuted, and stays until the POSH Admin has audited the report.'
+              : 'Reports you have submitted will be listed here with the auditor’s response.'
+          }
+        />
       ) : (
         shown.map(({ record, flow }) => {
           const drafting = draftFor === record.id

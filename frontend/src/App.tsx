@@ -1,5 +1,6 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { RoleProvider, useRole } from './lib/role-context'
+import { ToastProvider } from './lib/toast'
 import { WorkflowProvider } from './lib/workflow/store'
 import { AppLayout } from './components/layout/AppLayout'
 import { SignInPage } from './pages/SignIn'
@@ -118,7 +119,8 @@ export default function App() {
   return (
     <RoleProvider>
       {/* Workflow state sits inside the role provider because every transition is gated
-          on who is signed in. */}
+          on who is signed in. Toasts wrap both so any of them can raise one. */}
+      <ToastProvider>
       <WorkflowProvider>
         <Routes>
           <Route path="/" element={<SignInPage />} />
@@ -201,6 +203,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </WorkflowProvider>
+      </ToastProvider>
     </RoleProvider>
   )
 }

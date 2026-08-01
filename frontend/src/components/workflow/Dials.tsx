@@ -1,4 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { Link } from 'react-router-dom'
+import { ArrowRight } from 'lucide-react'
 import './Dials.css'
 
 /**
@@ -286,21 +288,36 @@ export function SparkBars({ values, tone = 'accent' }: { values: number[]; tone?
  * Figure tile — a headline number with a dial or spark beside it
  * ------------------------------------------------------------------ */
 
+/**
+ * A headline figure.
+ *
+ * Pass `to` and it becomes a link into the list it counts. The critique's complaint about
+ * these was fair — "Past 90 days: 1" is a poster unless clicking it shows you the one.
+ * The call to action is spelled out in text rather than implied by a hover state, because
+ * a tile that only reveals itself on hover is invisible on a touch screen and to anyone
+ * navigating by keyboard.
+ */
 export function FigureTile({
   label,
   value,
   meta,
   aside,
   tone,
+  to,
+  cta,
 }: {
   label: string
   value: ReactNode
   meta?: ReactNode
   aside?: ReactNode
   tone?: 'accent' | 'warning' | 'danger'
+  /** Makes the whole tile a link. */
+  to?: string
+  /** Text for the call to action. Defaults to "View". */
+  cta?: string
 }) {
-  return (
-    <div className="figure-tile">
+  const body = (
+    <>
       <div style={{ minWidth: 0 }}>
         <div className="figure-label">{label}</div>
         <div
@@ -318,8 +335,22 @@ export function FigureTile({
           {value}
         </div>
         {meta ? <div className="figure-meta">{meta}</div> : null}
+        {to ? (
+          <span className="figure-cta">
+            {cta ?? 'View'}
+            <ArrowRight size={12} strokeWidth={1.5} />
+          </span>
+        ) : null}
       </div>
       {aside ? <div className="figure-aside">{aside}</div> : null}
-    </div>
+    </>
+  )
+
+  return to ? (
+    <Link to={to} className="figure-tile">
+      {body}
+    </Link>
+  ) : (
+    <div className="figure-tile">{body}</div>
   )
 }

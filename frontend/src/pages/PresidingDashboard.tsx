@@ -209,23 +209,31 @@ export function PresidingDashboardPage() {
           value={active.length}
           meta={`${rows.length} in total, including concluded`}
           aside={<SparkBars values={loadShape} />}
+          to="/assigned-cases"
+          cta="Open my inquiries"
         />
         <FigureTile
           label="Past 90 days"
           value={breached.length}
           tone={breached.length ? 'danger' : undefined}
           meta={breached.length ? 'A recorded reason is required on each' : 'Every inquiry within the window'}
+          to="/cause-list?filter=breached"
+          cta="Show these sittings"
         />
         <FigureTile
           label="Within 14 days of limit"
           value={nearLimit.length}
           tone={nearLimit.length ? 'warning' : undefined}
           meta="Listing priority for the bench"
+          to="/cause-list?filter=near-limit"
+          cta="Show these sittings"
         />
         <FigureTile
           label="Reports owed to employer"
           value={reportsOwed.length}
           meta="s.13(1) — within 10 days of the inquiry concluding"
+          to="/ic-recommendations"
+          cta="Open the recommendation centre"
         />
       </div>
 

@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useCallback, useState } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Check,
@@ -29,11 +29,13 @@ import { actorName, actorInitials, userById } from '../lib/data/users'
 import { dateNDaysAgo } from '../lib/data/statutory'
 import { useRole } from '../lib/role-context'
 import { useWorkflow } from '../lib/workflow/store'
+import { useToast } from '../lib/toast'
 import { STAGE_META } from '../lib/workflow/types'
 import { StageTracker, StageSteps, custodian } from '../components/workflow/StageTracker'
 import { ActionPanel } from '../components/workflow/ActionPanel'
 import { formatDate, formatTimestamp } from '../lib/format'
 import { StagePill } from '../components/ui/StagePill'
+import { ScrollTabs } from '../components/ui/ScrollTabs'
 import { ComplianceClock } from '../components/ui/ComplianceClock'
 import './CaseWorkspace.css'
 
@@ -143,12 +145,45 @@ function fileIconLabel(name: string): string {
    MAIN COMPONENT
    ══════════════════════════════════════════════════════════════════ */
 
+/** URL slug ⇄ tab label. The slug is what a shared link carries. */
+const TAB_SLUG: Record<Tab, string> = {
+  Workflow: 'workflow',
+  Overview: 'overview',
+  Parties: 'parties',
+  Timeline: 'timeline',
+  Proceedings: 'proceedings',
+  Evidence: 'evidence',
+  Documents: 'documents',
+  Communications: 'communications',
+  Actions: 'actions',
+}
+const TAB_BY_SLUG = Object.fromEntries(
+  (Object.entries(TAB_SLUG) as Array<[Tab, string]>).map(([tab, slug]) => [slug, tab]),
+) as Record<string, Tab>
+
 export function CasesPage() {
   const { caseId } = useParams()
   const { maskParty, canOpenCase } = useRole()
   const { caseById: caseFromStore, flowFor, committeeById, visibleCases } = useWorkflow()
-  const [activeTab, setActiveTab] = useState<Tab>('Workflow')
-  const [copied, setCopied] = useState(false)
+  const { push } = useToast()
+
+  /**
+   * The open tab lives in the URL, not in component state, so `?tab=evidence` opens the
+   * evidence register directly and "Copy link" reproduces exactly what the sender was
+   * looking at. Tab changes `replace` rather than push, so Back leaves the case instead
+   * of walking back through every tab the reader happened to open.
+   */
+  const [params, setParams] = useSearchParams()
+  const activeTab: Tab = TAB_BY_SLUG[params.get('tab') ?? ''] ?? 'Workflow'
+  const setActiveTab = useCallback(
+    (tab: Tab) => {
+      const next = new URLSearchParams(params)
+      next.set('tab', TAB_SLUG[tab])
+      setParams(next, { replace: true })
+    },
+    [params, setParams],
+  )
+
   const [selectedEvidence, setSelectedEvidence] = useState<string | null>(null)
 
   // The store's list covers both the seeded caseload and anything raised in-session,
@@ -159,11 +194,20 @@ export function CasesPage() {
   const allowed = canOpenCase(record.id) || visibleCases.some((c) => c.id === record.id)
   const flow = flowFor(record.id)
 
+  /**
+   * Copies the deep link, not the case number.
+   *
+   * "Send me that case" is the action this whole phase exists to make possible, and a
+   * bare `POSH-2026-0142` pasted into chat is not a link. The URL carries the open tab
+   * so the recipient lands where the sender was.
+   */
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(record.id).catch(() => {})
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }, [record.id])
+    const url = `${window.location.origin}/cases/${encodeURIComponent(record.id)}?tab=${TAB_SLUG[activeTab]}`
+    navigator.clipboard
+      .writeText(url)
+      .then(() => push(`Link to ${record.id} copied`, 'success'))
+      .catch(() => push('Could not copy — your browser blocked clipboard access', 'error'))
+  }, [record.id, activeTab, push])
 
   if (!allowed) {
     return (
@@ -230,11 +274,12 @@ export function CasesPage() {
               <span className="cw-case-id">{record.id}</span>
               <button
                 type="button"
-                className={`cw-copy-btn ${copied ? 'copied' : ''}`}
-                title="Copy case ID"
+                className="cw-copy-btn"
+                title="Copy a link to this case"
+                aria-label={`Copy a link to case ${record.id}`}
                 onClick={handleCopy}
               >
-                {copied ? <Check {...ICON_SM} /> : <Copy {...ICON_SM} />}
+                <Copy {...ICON_SM} />
               </button>
             </div>
             <div className="cw-meta-row">
@@ -306,19 +351,21 @@ export function CasesPage() {
         {/* ═══════════════════ MAIN PANEL ═══════════════════ */}
         <main className="cw-main">
 
-          {/* Tab bar (underline style) */}
-          <nav className="cw-tabs">
+          {/* Tab bar (underline style). Scrolls, and says so at narrow widths. */}
+          <ScrollTabs activeIndex={TABS.indexOf(activeTab)} ariaLabel={`Case ${record.id} sections`}>
             {TABS.map(t => (
               <button
                 key={t}
                 type="button"
+                role="tab"
+                aria-selected={activeTab === t}
                 className={`cw-tab ${activeTab === t ? 'active' : ''}`}
                 onClick={() => setActiveTab(t)}
               >
                 {t}
               </button>
             ))}
-          </nav>
+          </ScrollTabs>
 
           {/* ──── Workflow Tab ──── */}
           {activeTab === 'Workflow' && flow && (

@@ -1,0 +1,52 @@
+/* Empty state — one component, six placements. Tokens only. */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-12) var(--space-5);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.empty-state.compact {
+  padding: var(--space-8) var(--space-4);
+  border: none;
+  background: transparent;
+}
+
+.empty-state-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  background: var(--color-raised);
+  border: 1px solid var(--color-border);
+  color: var(--color-secondary-text);
+  margin-bottom: var(--space-1);
+}
+
+.empty-state.compact .empty-state-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.empty-state-headline {
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--color-primary);
+}
+
+.empty-state-detail {
+  font-size: var(--text-sm);
+  /* Secondary text on the surface tone, which clears AA at this size. */
+  color: var(--color-secondary-text);
+  line-height: 1.6;
+  max-width: 52ch;
+}
+
+.empty-state-action { margin-top: var(--space-3); }

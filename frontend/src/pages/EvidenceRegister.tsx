@@ -9,6 +9,7 @@ import { formatDate, formatTimestamp } from '../lib/format'
 import type { EvidenceItem } from '../lib/data/types'
 import '../components/workflow/Workflow.css'
 import '../components/workflow/EmployeePortal.css'
+import { EmptyState } from '../components/ui/EmptyState'
 
 /**
  * Evidence register, scoped to the cases this member sits on.
@@ -157,9 +158,12 @@ export function EvidenceRegisterPage() {
         </div>
         <div className="ep-card-body tight">
           {shownFiled.length === 0 ? (
-            <p className="text-13 text-muted" style={{ padding: 'var(--space-4) 0' }}>
-              Nothing filed is awaiting admission.
-            </p>
+            <EmptyState
+              compact
+              icon={Fingerprint}
+              headline="Nothing awaiting admission"
+              detail="Material filed by a party appears here until the committee admits it to the record or asks for more."
+            />
           ) : (
             shownFiled.map((e) => (
               <div key={`${e.caseId}-${e.id}`} className="ep-doc" style={{ gridTemplateColumns: '1fr auto' }}>

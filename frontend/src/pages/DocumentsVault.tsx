@@ -9,6 +9,7 @@ import { formatFileSize, formatTimestamp } from '../lib/format'
 import type { DocumentRecord } from '../lib/data/types'
 import '../components/workflow/Workflow.css'
 import '../components/workflow/EmployeePortal.css'
+import { EmptyState } from '../components/ui/EmptyState'
 
 const ICON = { size: 14, strokeWidth: 1.5 } as const
 
@@ -108,7 +109,11 @@ export function DocumentsVaultPage() {
       </div>
 
       {Object.keys(grouped).length === 0 ? (
-        <div className="wf-empty">No document matches those filters.</div>
+        <EmptyState
+          icon={FolderLock}
+          headline="No document matches those filters"
+          detail="Clear the search or widen the category to see the rest of the vault."
+        />
       ) : (
         Object.entries(grouped).map(([caseId, docs]) => (
           <section key={caseId} className="ep-card">
