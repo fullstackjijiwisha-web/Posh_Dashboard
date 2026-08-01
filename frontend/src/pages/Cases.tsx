@@ -8,6 +8,7 @@ import {
   Clock,
   Copy,
   Download,
+  ShieldCheck,
   Eye,
   Lock,
   PenLine,
@@ -31,11 +32,13 @@ import { useRole } from '../lib/role-context'
 import { useWorkflow } from '../lib/workflow/store'
 import { useToast } from '../lib/toast'
 import { STAGE_META } from '../lib/workflow/types'
+import { ROLE_LABEL } from '../lib/data/types'
 import { StageTracker, StageSteps, custodian } from '../components/workflow/StageTracker'
 import { ActionPanel } from '../components/workflow/ActionPanel'
 import { formatDate, formatTimestamp } from '../lib/format'
 import { StagePill } from '../components/ui/StagePill'
 import { ScrollTabs } from '../components/ui/ScrollTabs'
+import { PackDialog } from '../components/defensibility/PackDialog'
 import { ComplianceClock } from '../components/ui/ComplianceClock'
 import './CaseWorkspace.css'
 
@@ -163,8 +166,8 @@ const TAB_BY_SLUG = Object.fromEntries(
 
 export function CasesPage() {
   const { caseId } = useParams()
-  const { maskParty, canOpenCase } = useRole()
-  const { caseById: caseFromStore, flowFor, committeeById, visibleCases } = useWorkflow()
+  const { maskParty, canOpenCase, can, currentUser, currentRole } = useRole()
+  const { caseById: caseFromStore, flowFor, committeeById, visibleCases, recordPackExport } = useWorkflow()
   const { push } = useToast()
 
   /**
@@ -185,6 +188,7 @@ export function CasesPage() {
   )
 
   const [selectedEvidence, setSelectedEvidence] = useState<string | null>(null)
+  const [packOpen, setPackOpen] = useState(false)
 
   // The store's list covers both the seeded caseload and anything raised in-session,
   // so a complaint filed a moment ago opens in the same workspace as a fixture case.
@@ -193,6 +197,10 @@ export function CasesPage() {
   // store's role-filtered list before refusing access.
   const allowed = canOpenCase(record.id) || visibleCases.some((c) => c.id === record.id)
   const flow = flowFor(record.id)
+
+  // Presiding Officer, IC members, External Member, POSH Admin and Company Owner — the
+  // roles the prompt names. All of them hold view:inquiry; HR SPOC and Management do not.
+  const canExportPack = can('view:inquiry') && (can('workflow:committee') || can('workflow:administer'))
 
   /**
    * Copies the deep link, not the case number.
@@ -289,6 +297,17 @@ export function CasesPage() {
               </span>
             </div>
           </div>
+
+          {/* ═══ Defensibility Pack ═══
+              Available to the committee, the administrator and the owner — the roles the
+              prompt names. HR SPOC and Management are excluded: neither holds
+              `view:inquiry`, and a pack is the entire inquiry in one file. */}
+          {canExportPack && (
+            <button type="button" className="btn btn-primary cw-pack-btn" onClick={() => setPackOpen(true)}>
+              <ShieldCheck {...ICON_SM} />
+              Generate Defensibility Pack
+            </button>
+          )}
 
           {/* ═══ Workflow position ═══ */}
           {flow && (
@@ -936,6 +955,23 @@ export function CasesPage() {
           </div>
         </aside>
       </div>
+
+      {/* ═══════════════════ Defensibility Pack ═══════════════════ */}
+      {packOpen && flow && (
+        <PackDialog
+          record={record}
+          flow={flow}
+          committee={committeeById(flow.committeeId)}
+          actor={{
+            name: currentUser?.name ?? 'Unknown',
+            role: currentRole ? ROLE_LABEL[currentRole] : 'Unknown',
+          }}
+          onClose={() => setPackOpen(false)}
+          onGenerated={(meta) =>
+            recordPackExport(record.id, { ...meta, recipient: '' })
+          }
+        />
+      )}
 
       {/* ═══════════════════ Evidence Slide-Over ═══════════════════ */}
       {selectedEvidence && selectedEv && (

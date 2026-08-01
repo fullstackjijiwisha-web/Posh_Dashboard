@@ -843,3 +843,10 @@ table.data tr.cw-evidence-row {
 table.data tr.cw-evidence-row:hover td {
   background: var(--color-raised);
 }
+
+/* Defensibility Pack trigger — the most consequential button in the left rail, so it
+   gets primary weight and full width rather than sitting in a row of secondaries. */
+.cw-pack-btn {
+  width: 100%;
+  justify-content: center;
+}

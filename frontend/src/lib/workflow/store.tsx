@@ -243,6 +243,7 @@ function seedFlow(record: Case): CaseFlow {
     finalDecision,
     feedback,
     advisoryNotes,
+    packExports: [],
     raisedInSession: false,
   }
 }
@@ -363,6 +364,7 @@ function loadState(): Persisted {
     for (const id of Object.keys(parsed.flows)) {
       const f = parsed.flows[id]
       f.advisoryNotes ??= []
+      f.packExports ??= []
       f.evidence ??= []
       f.evidenceRequests ??= []
       f.hearings ??= []
@@ -429,6 +431,7 @@ export interface WorkflowState {
   recordDecision: (caseId: string, input: Omit<FinalDecision, 'at' | 'recordedBy'>) => void
   createAdminAccount: (input: { name: string; email: string; department: string }) => void
   addAdvisoryNote: (caseId: string, text: string, concern: boolean) => void
+  recordPackExport: (caseId: string, meta: { rootHash: string; redacted: boolean; pages: number; recipient: string }) => void
   submitComplaint: (input: NewComplaintInput) => string
   markNotificationsRead: () => void
   resetWorkflow: () => void
@@ -925,6 +928,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         finalDecision: null,
         feedback: null,
         advisoryNotes: [],
+        packExports: [],
         raisedInSession: true,
       }
 
@@ -983,6 +987,35 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     [actorId, actorName, actorRole, notify],
   )
 
+  /**
+   * Records that a Defensibility Pack was generated.
+   *
+   * Not a notification — an entry on the case. A pack is a complete copy of a
+   * confidential file leaving the system, and the record of who took one has to outlive
+   * whoever was watching at the time.
+   */
+  const recordPackExport = useCallback(
+    (caseId: string, meta: { rootHash: string; redacted: boolean; pages: number; recipient: string }) => {
+      setState((prev) => {
+        const flow = prev.flows[caseId]
+        if (!flow) return prev
+        const entry = {
+          id: `${caseId}-pack-${Date.now()}`,
+          at: new Date().toISOString(),
+          actorId,
+          actorName,
+          actorRole,
+          ...meta,
+        }
+        return {
+          ...prev,
+          flows: { ...prev.flows, [caseId]: { ...flow, packExports: [...(flow.packExports ?? []), entry] } },
+        }
+      })
+    },
+    [actorId, actorName, actorRole],
+  )
+
   const markNotificationsRead = useCallback(() => {
     setState((prev) => ({
       ...prev,
@@ -1024,6 +1057,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       recordDecision,
       createAdminAccount,
       addAdvisoryNote,
+      recordPackExport,
       submitComplaint,
       markNotificationsRead,
       resetWorkflow,
@@ -1048,6 +1082,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       recordDecision,
       createAdminAccount,
       addAdvisoryNote,
+      recordPackExport,
       submitComplaint,
       markNotificationsRead,
       resetWorkflow,

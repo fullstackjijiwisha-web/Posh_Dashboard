@@ -199,3 +199,131 @@ still name-free.
   touching `main.tsx` during a fixture phase. **TODO: revisit** in Phase 4.
 - Bundle is 1.23 MB (322 KB gzipped). Route-level code splitting is worth doing before the
   demo; not in scope for this phase.
+
+---
+
+## Phase 11 (run early) — The Defensibility Pack (`PROMPT 4`)
+
+**Run out of order at the operator's request.** The plan placed this after Phase 5
+(evidence hashing) and Phase 10 (minutes) so it could include them. Running it now means
+those pieces get built here instead, at the depth the pack needs — which is genuinely
+less than a full Phase 5, and the difference is recorded honestly under "what is real"
+below rather than papered over.
+
+### Plan
+
+**Ten sections, one hash chain, three options, a four-second assembly, a preview.**
+
+#### Dependencies this pulls forward
+
+- **SHA-256** — Phase 5 owns evidence hashing. The pack needs a hash per item and a root
+  hash for the certificate, so hashing is built here using **Web Crypto**
+  (`crypto.subtle.digest`) — no dependency, and it is the same primitive Phase 5 and
+  W5 (the Ledger) will use. Canonical JSON serialisation so a hash is reproducible.
+- **Redaction** — option 3 says the redacted pack "uses the Presenter Mode alias system",
+  which is Phase 2 and does not exist. Building the alias layer here rather than a
+  throwaway: `lib/defensibility/alias.ts` is written as the shared vocabulary Presenter
+  Mode will consume, so Phase 2 wires a toggle to it instead of inventing a second one.
+- **Minutes** — Phase 10 owns the minutes editor. The pack prints whatever minutes exist
+  on a sitting today; it does not invent a richer structure.
+
+#### The PDF library
+
+`jsPDF`. The prompt explicitly sanctions a client-side library and forbids pypdf. Chosen
+over `pdf-lib` because it is roughly a third of the size and has the text-flow primitives
+this needs; the pack is typeset text, not PDF surgery.
+
+Standing Rule 5 asks for a reason on any new dependency, and there is a second one worth
+recording: it is **dynamically imported**, so it code-splits out of the main bundle and
+only downloads when somebody actually generates a pack. The main bundle does not grow.
+
+#### Structure
+
+- `lib/defensibility/hash.ts` — canonical serialise + SHA-256 + short-form display
+- `lib/defensibility/alias.ts` — the redaction vocabulary (Complainant A, Witness 1,
+  Internal Member 1, `•••• ••••` for contact details at matching character width)
+- `lib/defensibility/pack.ts` — assembles the ten sections from existing data, hashes
+  each, then computes the root. Pure: no rendering, so it is testable and so W5 can reuse
+  the same assembly for the Ledger.
+- `lib/defensibility/render.ts` — jsPDF. Serif body, running header with the case ID,
+  "Page x of y", diagonal watermark, section cover pages.
+- `components/defensibility/PackDialog.tsx` — options → assembly sequence → preview.
+
+#### Auditable
+
+Generating a pack is itself an event. The workflow store gains `packExports` on the flow
+and `recordPackExport()`, so the access log in a *later* pack shows who exported the
+earlier one. That is the property that makes an access log worth anything.
+
+### Execution
+
+Done. Typecheck clean, build passes, **lint zero errors**, browser run **zero console
+errors**. A real 16-page PDF was generated and its contents extracted and inspected —
+not just the metadata.
+
+**What was verified, by opening the file rather than trusting the UI:**
+
+- 16 pages, valid `%PDF-` header, 29 KB, 10 sections
+- Every required element present in the extracted text: cover, `Page 1 of`, running
+  header, `Root SHA`, chronology, quorum results, `NOT MET` on failing tests, the
+  s.16 confidentiality line, the recipient in the watermark, certificate page
+- **Redaction leak-checked against all ten real people in the fixture.** In the redacted
+  pack: zero occurrences of any party or committee member, zero email addresses, zero
+  phone numbers. The only real name is the person who generated it, on the cover and the
+  certificate — required, since an unsigned certificate of completeness is worthless.
+- Root hash differs between the redacted and unredacted packs, as it must
+- The export is recorded on the flow: `{by: Priya Sharma, role: Presiding Officer,
+  redacted: false, pages: 16, hash: 38398997694c}`
+
+**Role gate:** the button appears for Presiding Officer, IC member, External Member,
+POSH Admin and Company Owner. HR SPOC and Management cannot even reach the case
+workspace — the `InquiryOnly` route guard turns them away first.
+
+**Assembly:** 3.6 seconds, narrating each section as it is genuinely built and hashed.
+
+### Two bugs found by driving the UI
+
+1. **The dialog rendered off-screen.** It reused the global `rise` keyframes, whose
+   `to { transform: translateY(0) }` with `fill-mode: both` persists after the animation
+   and *overwrote* the `translate(-50%, -50%)` that centres a fixed modal. The dialog sat
+   at viewport-centre as its top-left corner, with its buttons past the right edge. Fixed
+   with its own keyframes that carry the centring. **Worth remembering for Phase 4** —
+   any centred element animated with a transform has this problem, and `rise` is used
+   widely.
+2. **The preview was blank.** It was an `<iframe>` pointed at the blob, which relies on
+   the browser having a PDF plugin. Replaced with page-shaped section thumbnails drawn
+   from the pack model — always render, carry each section's title, entry count and
+   digest — plus "Open the PDF" which hands the real document to the browser's viewer.
+
+### Decisions and deviations
+
+- **Run out of order**, at the operator's request. Consequences are under "what is real".
+- **jsPDF added** — sanctioned by the prompt, chosen over pdf-lib for size, and
+  **dynamically imported** so it code-splits. The main bundle went 1.226 → 1.251 MB
+  (+25 KB for the dialog); jsPDF's 399 KB and its optional deps sit in separate chunks
+  that only download when somebody generates a pack.
+- **No pdf.js.** True page rasterisation for thumbnails would cost roughly a megabyte to
+  show a preview of something the reader can open in one click. The section thumbnails
+  are honest about being a contents preview.
+- **Hashing built on Web Crypto**, no dependency. `canonical()` sorts object keys at
+  every depth because `JSON.stringify` is insertion-ordered and would make the same
+  record hash differently depending on how it was assembled — a hash that is not
+  reproducible is not evidence.
+- **The alias layer is the Presenter Mode foundation**, not a throwaway. Phase 2 should
+  consume `lib/defensibility/alias.ts` rather than write a second vocabulary; if the two
+  ever disagree, the confidentiality claim collapses.
+- **Excluding the access log states the count** of withheld records, so absence cannot be
+  read as non-existence.
+
+### What is real, and what is not
+
+- **Real:** all ten sections, per-section and root SHA-256, quorum and s.4 tests
+  recomputed at print time, redaction, watermark, page numbering, the auditable export
+  record.
+- **Evidence hashes cover metadata, not file bytes** — the fixture has no files. Phase 5
+  should hash content on upload and store it; the pack will then print the stored digest
+  instead of recomputing from metadata. **TODO: revisit in Phase 5.**
+- **Minutes print whatever exists on a sitting today.** Phase 10's structured editor will
+  give them per-speaker attribution and versioning; the pack will pick that up for free.
+- **No verification UI yet.** The pack states its digests; recomputing them to prove the
+  document is unaltered is W5 (the Ledger).

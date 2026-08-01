@@ -396,6 +396,27 @@ export interface FlowNotification {
   read: boolean
 }
 
+/**
+ * A Defensibility Pack that was generated.
+ *
+ * Recorded because generating a complete copy of a confidential case file is itself a
+ * disclosure event — arguably the most significant one in the product. A later pack's
+ * access log shows the earlier export, which is what makes "who has seen this case"
+ * answerable rather than merely claimed.
+ */
+export interface PackExport {
+  id: string
+  at: string
+  actorId: string
+  actorName: string
+  actorRole: string
+  /** Root digest of the pack that was produced. */
+  rootHash: string
+  redacted: boolean
+  pages: number
+  recipient: string
+}
+
 /** Everything the workflow layer knows about one case. */
 export interface CaseFlow {
   caseId: string
@@ -411,6 +432,7 @@ export interface CaseFlow {
   finalDecision: FinalDecision | null
   feedback: ProcessFeedback | null
   advisoryNotes: AdvisoryNote[]
+  packExports: PackExport[]
   /** True for cases raised through the in-app complaint form during this session. */
   raisedInSession: boolean
 }
