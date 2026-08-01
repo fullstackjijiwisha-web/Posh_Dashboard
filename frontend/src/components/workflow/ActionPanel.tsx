@@ -19,7 +19,14 @@ const ICON = { size: 14, strokeWidth: 1.5 } as const
  * on instead of going blank, because "nothing here" and "not your turn" are different
  * things and a demo audience will ask which one they are looking at.
  */
-export function ActionPanel({ caseId }: { caseId: string }) {
+export function ActionPanel({
+  caseId,
+  historical = false,
+}: {
+  caseId: string
+  /** Time Machine — actions are locked while viewing a past date. */
+  historical?: boolean
+}) {
   const { availableActions, runAction, flowFor } = useWorkflow()
   const { currentRole } = useRole()
   const [pending, setPending] = useState<{ id: string; label: string; noteLabel: string } | null>(null)
@@ -27,6 +34,21 @@ export function ActionPanel({ caseId }: { caseId: string }) {
 
   const flow = flowFor(caseId)
   if (!flow) return null
+
+  if (historical) {
+    return (
+      <div className="wf-waiting" title="Historical view — actions are disabled.">
+        <Lock {...ICON} className="mt-0.5 shrink-0 text-faint" />
+        <div>
+          <div className="wf-waiting-title">Historical view</div>
+          <div className="wf-waiting-detail">
+            Actions are disabled while the Time Machine is not at today. Return to today to act on
+            this case.
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const actions = availableActions(caseId)
   const meta = STAGE_META[flow.stage]

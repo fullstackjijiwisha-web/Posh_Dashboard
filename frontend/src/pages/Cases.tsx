@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
   ArrowDownLeft,
@@ -45,9 +45,12 @@ import { StagePill } from '../components/ui/StagePill'
 import { ScrollTabs } from '../components/ui/ScrollTabs'
 import { PackDialog } from '../components/defensibility/PackDialog'
 import { ComplianceClock } from '../components/ui/ComplianceClock'
+import { CountUp } from '../components/ui/CountUp'
 import { DocumentComposer } from '../components/documents/DocumentComposer'
 import { IssueDialog } from '../components/documents/IssueDialog'
 import { MinutesEditor } from '../components/documents/MinutesEditor'
+import { TimeMachineBar } from '../components/timemachine/TimeMachineBar'
+import { useTimeMachine } from '../lib/timemachine/useTimeMachine'
 import { shortHash } from '../lib/defensibility/hash'
 import './CaseWorkspace.css'
 import '../components/documents/Documents.css'
@@ -228,6 +231,13 @@ export function CasesPage() {
   const allowed = canOpenCase(record.id) || visibleCases.some((c) => c.id === record.id)
   const flow = flowFor(record.id)
 
+  // Time Machine — derive the case as it stood on any past date from the event log.
+  const tm = useTimeMachine(record, flow)
+  const viewRecord = tm.view.record
+  const viewStage = tm.view.stage
+  const viewHistory = tm.view.history
+  const isHistorical = tm.isHistorical
+
   // Presiding Officer, IC members, External Member, POSH Admin and Company Owner — the
   // roles the prompt names. All of them hold view:inquiry; HR SPOC and Management do not.
   const canExportPack = can('view:inquiry') && (can('workflow:committee') || can('workflow:administer'))
@@ -246,6 +256,36 @@ export function CasesPage() {
       .then(() => push(`Link to ${record.id} copied`, 'success'))
       .catch(() => push('Could not copy — your browser blocked clipboard access', 'error'))
   }, [record.id, activeTab, push])
+
+  // Hooks that filter by as-of must run before any early return (Rules of Hooks).
+  const liveEvidence = useMemo(() => evidenceForCase(record.id), [record.id])
+  const liveHearings = useMemo(() => hearingsFor(record.id), [record.id])
+  const liveDocuments = useMemo(() => documentsFor(record.id), [record.id])
+  const liveComms = useMemo(() => communicationsFor(record.id), [record.id])
+  const liveActions = useMemo(() => actionsFor(record.id), [record.id])
+  const liveAudit = useMemo(() => auditForCase(record.id), [record.id])
+
+  const evidence = useMemo(
+    () => liveEvidence.filter((e) => tm.view.evidenceIds.has(e.id)),
+    [liveEvidence, tm.view.evidenceIds],
+  )
+  const hearings = useMemo(
+    () => liveHearings.filter((h) => tm.view.hearingIds.has(h.id)),
+    [liveHearings, tm.view.hearingIds],
+  )
+  const documents = useMemo(
+    () => liveDocuments.filter((d) => tm.view.documentIds.has(d.id)),
+    [liveDocuments, tm.view.documentIds],
+  )
+  const comms = useMemo(
+    () => liveComms.filter((c) => c.at.slice(0, 10) <= tm.view.asOf),
+    [liveComms, tm.view.asOf],
+  )
+  const actions = liveActions
+  const audit = useMemo(
+    () => liveAudit.filter((e) => e.at.slice(0, 10) <= tm.view.asOf),
+    [liveAudit, tm.view.asOf],
+  )
 
   if (!allowed) {
     return (
@@ -268,17 +308,12 @@ export function CasesPage() {
     )
   }
 
-  const evidence = evidenceForCase(record.id)
-  const hearings = hearingsFor(record.id)
-  const documents = documentsFor(record.id)
-  const comms = communicationsFor(record.id)
-  const actions = actionsFor(record.id)
-  const audit = auditForCase(record.id)
-
   /* ── Phase 6 — what the document layer holds for this case ────────── */
 
-  // Documents drafted from the template library, newest first.
-  const generated = [...(flow?.documents ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  // Documents drafted from the template library, newest first — filtered by Time Machine.
+  const generated = [...(flow?.documents ?? [])]
+    .filter((d) => tm.view.documentIds.has(d.id))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   const issuingDoc = generated.find((d) => d.id === issuingId) ?? null
   const minutesHearing = hearings.find((h) => h.id === minutesFor) ?? null
 
@@ -288,7 +323,9 @@ export function CasesPage() {
 
   /** Latest minutes taken for a sitting, whatever version. */
   const minutesOf = (hearingId: string) => {
-    const rows = (flow?.minutes ?? []).filter((m) => m.hearingId === hearingId)
+    const rows = (flow?.minutes ?? []).filter(
+      (m) => m.hearingId === hearingId && m.createdAt.slice(0, 10) <= tm.view.asOf,
+    )
     return rows.length ? rows.reduce((a, b) => (b.version > a.version ? b : a)) : null
   }
 
@@ -311,7 +348,7 @@ export function CasesPage() {
       session: false,
     })),
     ...generated
-      .filter((d) => d.issuedAt)
+      .filter((d) => d.issuedAt && d.issuedAt.slice(0, 10) <= tm.view.asOf)
       .map((d) => ({
         key: d.id,
         at: d.issuedAt!,
@@ -340,6 +377,19 @@ export function CasesPage() {
   // Selected evidence for slide-over
   const selectedEv = evidence.find(e => e.id === selectedEvidence)
 
+  // Diff markers — amber edge when the historical value differs from today.
+  const stageDiff = isHistorical && viewStage !== flow?.stage
+  const dayDiff = isHistorical && viewRecord.daysElapsed !== record.daysElapsed
+  const evidenceDiff = isHistorical && evidence.length !== liveEvidence.length
+  const docsDiff = isHistorical && documents.length + generated.length !== liveDocuments.length + (flow?.documents?.length ?? 0)
+  const historyDiff = isHistorical && viewHistory.length !== (flow?.history.length ?? 0)
+
+  const flowEvidenceAsOf = (flow?.evidence ?? []).filter((e) => tm.view.evidenceIds.has(e.id))
+  const flowHearingsAsOf = (flow?.hearings ?? []).filter((h) => tm.view.hearingIds.has(h.id))
+  const recommendationsAsOf = (flow?.recommendations ?? []).filter((r) =>
+    tm.view.recommendationIds.has(r.id),
+  )
+
   return (
     <div className="flex flex-col gap-4">
       {/* Breadcrumb */}
@@ -351,8 +401,11 @@ export function CasesPage() {
         Back to cases
       </Link>
 
+      {/* Time Machine — scrub the record to any past date */}
+      <TimeMachineBar tm={tm} filedDate={record.filedDate} notches={tm.view.notches} />
+
       {/* Three-column layout */}
-      <div className="cw-shell">
+      <div className={`cw-shell tm-shell tm-crossfade${isHistorical ? ' is-historical' : ''}`}>
 
         {/* ═══════════════════ LEFT RAIL ═══════════════════ */}
         <aside className="cw-left">
@@ -363,7 +416,7 @@ export function CasesPage() {
               <span className="cw-case-id">{record.id}</span>
               <button
                 type="button"
-                className="cw-copy-btn"
+                className="cw-copy-btn tm-allow"
                 title="Copy a link to this case"
                 aria-label={`Copy a link to case ${record.id}`}
                 onClick={handleCopy}
@@ -371,8 +424,8 @@ export function CasesPage() {
                 <Copy {...ICON_SM} />
               </button>
             </div>
-            <div className="cw-meta-row">
-              <StagePill stage={record.stage} />
+            <div className={`cw-meta-row${stageDiff ? ' tm-diff' : ''}`}>
+              <StagePill stage={viewRecord.stage} />
               <span className={`badge ${PRIORITY_PILL[record.priority]}`}>
                 {record.priority}
               </span>
@@ -384,21 +437,32 @@ export function CasesPage() {
               prompt names. HR SPOC and Management are excluded: neither holds
               `view:inquiry`, and a pack is the entire inquiry in one file. */}
           {canExportPack && (
-            <button type="button" className="btn btn-primary cw-pack-btn" onClick={() => setPackOpen(true)}>
+            <button
+              type="button"
+              className="btn btn-primary cw-pack-btn"
+              onClick={() => setPackOpen(true)}
+              disabled={isHistorical}
+              title={isHistorical ? 'Historical view — actions are disabled.' : undefined}
+            >
               <ShieldCheck {...ICON_SM} />
               Generate Defensibility Pack
             </button>
           )}
 
           {/* ═══ Compliance Clock — hero of the left rail ═══ */}
-          <ComplianceClock record={record} />
+          <div className={dayDiff ? 'tm-diff' : undefined}>
+            <ComplianceClock
+              record={viewRecord}
+              asOf={isHistorical ? tm.view.asOf : undefined}
+            />
+          </div>
 
           {/* ═══ Workflow position ═══ */}
           {flow && (
-            <div>
+            <div className={stageDiff ? 'tm-diff' : undefined}>
               <div className="cw-section-label">Workflow</div>
               <div className="card card-pad" style={{ padding: 'var(--space-4)' }}>
-                <StageTracker stage={flow.stage} compact />
+                <StageTracker stage={viewStage} compact />
               </div>
             </div>
           )}
@@ -472,17 +536,21 @@ export function CasesPage() {
             <div className="cw-panel rise">
               <div className="cw-panel-head">
                 <h2 className="cw-panel-title">Case workflow</h2>
-                <span className="meta-pill">{flow.history.length} transitions</span>
+                <span className={`meta-pill${historyDiff ? ' tm-diff' : ''}`}>
+                  {viewHistory.length} transitions
+                </span>
               </div>
 
               <div className="cw-panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-                <StageTracker stage={flow.stage} />
+                <div className={stageDiff ? 'tm-diff' : undefined}>
+                  <StageTracker stage={viewStage} />
+                </div>
 
-                <div>
+                <div data-tm-actions={isHistorical ? '' : undefined}>
                   <div className="cw-overview-label" style={{ marginBottom: 12 }}>
                     Your actions
                   </div>
-                  <ActionPanel caseId={record.id} />
+                  <ActionPanel caseId={record.id} historical={isHistorical} />
                 </div>
 
                 {/* Standing state that the buttons act on. */}
@@ -503,39 +571,43 @@ export function CasesPage() {
                           : 'None yet'}
                     </span>
                   </div>
-                  <div className="cw-overview-item">
+                  <div className={`cw-overview-item${evidenceDiff ? ' tm-diff' : ''}`}>
                     <span className="cw-overview-label">Evidence on record</span>
                     <span className="cw-overview-value">
-                      {flow.evidence.length} item{flow.evidence.length === 1 ? '' : 's'}
-                      {flow.evidence.some((e) => e.status === 'Pending verification')
-                        ? ` · ${flow.evidence.filter((e) => e.status === 'Pending verification').length} pending`
-                        : ' · all verified'}
+                      {flowEvidenceAsOf.length} item{flowEvidenceAsOf.length === 1 ? '' : 's'}
+                      {flowEvidenceAsOf.some((e) => e.status === 'Pending verification')
+                        ? ` · ${flowEvidenceAsOf.filter((e) => e.status === 'Pending verification').length} pending`
+                        : flowEvidenceAsOf.length
+                          ? ' · all verified'
+                          : ''}
                     </span>
                   </div>
                   <div className="cw-overview-item">
                     <span className="cw-overview-label">Sittings listed</span>
                     <span className="cw-overview-value">
-                      {flow.hearings.length
-                        ? `${flow.hearings.length} · ${flow.hearings.filter((h) => h.minutes).length} minuted`
+                      {flowHearingsAsOf.length
+                        ? `${flowHearingsAsOf.length} · ${flowHearingsAsOf.filter((h) => h.minutes).length} minuted`
                         : 'None listed'}
                     </span>
                   </div>
                   <div className="cw-overview-item">
                     <span className="cw-overview-label">Recommendation</span>
                     <span className="cw-overview-value">
-                      {flow.recommendations.length
-                        ? flow.recommendations[flow.recommendations.length - 1].status
+                      {recommendationsAsOf.length
+                        ? recommendationsAsOf[recommendationsAsOf.length - 1].status
                         : 'Not yet drafted'}
                     </span>
                   </div>
-                  <div className="cw-overview-item">
+                  <div className={`cw-overview-item${stageDiff ? ' tm-diff' : ''}`}>
                     <span className="cw-overview-label">Currently with</span>
-                    <span className="cw-overview-value">{custodian(flow.stage)}</span>
+                    <span className="cw-overview-value">{custodian(viewStage)}</span>
                   </div>
                 </div>
 
                 {/* Outstanding request for more material, if any. */}
-                {flow.evidenceRequests.filter((r) => !r.fulfilledAt).map((r) => (
+                {flow.evidenceRequests
+                  .filter((r) => !r.fulfilledAt && r.requestedAt.slice(0, 10) <= tm.view.asOf)
+                  .map((r) => (
                   <div key={r.id} className="wf-blocked">
                     <Clock {...ICON_SM} style={{ color: 'var(--color-warning)', marginTop: 1, flexShrink: 0 }} />
                     <span>
@@ -548,7 +620,7 @@ export function CasesPage() {
                 ))}
 
                 {/* Final decision, once recorded. */}
-                {flow.finalDecision && (
+                {flow.finalDecision && flow.finalDecision.at.slice(0, 10) <= tm.view.asOf && (
                   <div className="cw-summary-block">
                     <div className="cw-overview-label" style={{ marginBottom: 8 }}>
                       Final decision — {flow.finalDecision.outcome}
@@ -564,15 +636,15 @@ export function CasesPage() {
                   <div className="cw-overview-label" style={{ marginBottom: 12 }}>
                     Lifecycle
                   </div>
-                  <StageSteps stage={flow.stage} />
+                  <StageSteps stage={viewStage} />
                 </div>
 
                 <div>
                   <div className="cw-overview-label" style={{ marginBottom: 8 }}>
                     Workflow history
                   </div>
-                  <div className="wf-history">
-                    {[...flow.history].reverse().map((h) => (
+                  <div className={`wf-history${historyDiff ? ' tm-diff' : ''}`}>
+                    {[...viewHistory].reverse().map((h) => (
                       <div key={h.id} className="wf-history-item">
                         <span className="wf-history-time">{formatTimestamp(h.at)}</span>
                         <span>
@@ -594,7 +666,9 @@ export function CasesPage() {
             <div className="cw-panel rise">
               <div className="cw-panel-head">
                 <h2 className="cw-panel-title">Case overview</h2>
-                <span className="meta-pill">Day {record.daysElapsed}</span>
+                <span className={`meta-pill${dayDiff ? ' tm-diff' : ''}`}>
+                  Day <CountUp value={viewRecord.daysElapsed} />
+                </span>
               </div>
               <div className="cw-panel-body">
                 <div className="cw-overview-grid">
@@ -803,7 +877,7 @@ export function CasesPage() {
             <div className="cw-panel rise">
               <div className="cw-panel-head">
                 <h2 className="cw-panel-title">Evidence register</h2>
-                <span className="meta-pill">{evidence.length} exhibits</span>
+                <span className={`meta-pill${evidenceDiff ? ' tm-diff' : ''}`}>{evidence.length} exhibits</span>
               </div>
               <div className="table-wrap" style={{ maxHeight: 'none' }}>
                 <table className="data" style={{ minWidth: 700 }}>
@@ -859,7 +933,7 @@ export function CasesPage() {
               <div className="cw-panel-head">
                 <h2 className="cw-panel-title">Documents</h2>
                 <div className="flex items-center gap-3">
-                  <span className="meta-pill">{documents.length + generated.length} filed</span>
+                  <span className={`meta-pill${docsDiff ? ' tm-diff' : ''}`}>{documents.length + generated.length} filed</span>
                   {canDraft && (
                     <button type="button" className="btn btn-primary" onClick={() => setComposerOpen(true)}>
                       <FileText {...ICON_SM} />

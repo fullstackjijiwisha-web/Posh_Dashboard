@@ -622,3 +622,42 @@ Clock and toasts use `aria-live`. Colour never alone — every clock state has i
   already updates instantly; a visible rollback would be theatre without a failure mode.
 - **Before/after screenshots** are for the human to capture in the running app; the craft
   changes are structural and visible on every dashboard and case record.
+
+---
+
+## Phase W1 — Time Machine
+
+*PROMPT W1 from `docs/CRITIQUE.md`. Event-log reconstruction of any past case date,
+with scrubber, historical visual language, and a twelve-second Replay.*
+
+### Data model
+
+The case is an ordered **event log**, not a set of snapshots. Sources merged into
+`TimelineEvent[]`: statutory milestones on the Case record, workflow history, fixture
+evidence / sittings / documents, and in-session flow records. State at a date is
+`deriveAt(record, flow, asOf)` — filter `at ≤ asOf`, then project stage, milestones,
+clocks, evidence, documents, hearings, recommendations, and truncated history.
+
+### What was built
+
+**1. Scrubber.** Slim bar under the case header (`TimeMachineBar`): track from filing to
+today, diamond notches for significant events (hover tooltip), drag handle (rAF-throttled),
+date jump, Return to today, keyboard arrows / Home / End.
+
+**2. Live re-derive.** Workflow tracker, StagePill, Compliance Clock (with `asOf`),
+evidence register, documents, sittings, recommendations, activity feed, and workflow
+history all re-render from the derived view.
+
+**3. Historical language.** Sepia desaturation + amber border on the case shell; banner
+"Viewing as at … — N days ago"; action buttons disabled (ActionPanel + CSS); amber
+left-edge `.tm-diff` markers where stage / day / counts differ from today.
+
+**4. Replay case.** Twelve-second animation from filing to today, pausable / stoppable.
+Clocks rewind and fill, evidence accumulates, workflow advances.
+
+### Deviations
+
+- **Committee membership over time** is not yet modelled in fixtures — the IC roster
+  shown is today's. Composition changes would need dated membership events on the log.
+- **Document version supersession** filters by upload date; there is no separate
+  version timeline beyond what fixtures already carry (`v1` / `v2` / `v3` labels).

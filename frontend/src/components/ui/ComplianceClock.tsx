@@ -185,6 +185,8 @@ function urgencyClass(ms: ClockMilestone): string {
 interface ComplianceClockProps {
   record: Case
   onRecordDelay?: () => void
+  /** When set, clocks recompute as if "today" were this date (Time Machine). */
+  asOf?: string
 }
 
 /**
@@ -194,17 +196,19 @@ interface ComplianceClockProps {
  * always paired with an icon and a text label. Breached clocks pulse slowly —
  * gravity, not an alarm.
  */
-export function ComplianceClock({ record, onRecordDelay }: ComplianceClockProps) {
-  const milestones = useMemo(() => buildClockMilestones(record), [record])
+export function ComplianceClock({ record, onRecordDelay, asOf }: ComplianceClockProps) {
+  const milestones = useMemo(() => buildClockMilestones(record, asOf), [record, asOf])
+  const historical = !!asOf
   const [nowLabel, setNowLabel] = useState(() => new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }))
 
   // Live countdown tick once a minute so "12 days remaining" stays honest across a long session.
   useEffect(() => {
+    if (historical) return
     const id = window.setInterval(() => {
       setNowLabel(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }))
     }, 60_000)
     return () => window.clearInterval(id)
-  }, [])
+  }, [historical])
 
   const activeIdx = milestones.findIndex((m) => m.state === 'running' || m.state === 'breached')
   const metCount = milestones.filter((m) => m.state === 'met').length
@@ -225,9 +229,12 @@ export function ComplianceClock({ record, onRecordDelay }: ComplianceClockProps)
           </div>
           <div className="cc-title">Statutory track</div>
         </div>
-        <span className="cc-live" title={`Updated ${nowLabel}`}>
+        <span
+          className="cc-live"
+          title={historical ? `As at ${asOf}` : `Updated ${nowLabel}`}
+        >
           <span className="live-dot" aria-hidden="true" />
-          Live
+          {historical ? 'As at' : 'Live'}
         </span>
       </div>
 

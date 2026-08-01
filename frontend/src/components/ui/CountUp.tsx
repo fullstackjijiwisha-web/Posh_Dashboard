@@ -26,13 +26,27 @@ export function CountUp({
       return
     }
 
-    // Subsequent changes: pulse the cell and snap, rather than re-counting.
+    // Subsequent changes: roll from the previous figure, then pulse.
     if (prev.current !== null && prev.current !== value) {
-      setDisplay(value)
-      setPulsed(true)
-      const t = window.setTimeout(() => setPulsed(false), 600)
+      const from = prev.current
+      const to = value
       prev.current = value
-      return () => window.clearTimeout(t)
+      setPulsed(true)
+      const pulseTimer = window.setTimeout(() => setPulsed(false), 600)
+      const start = performance.now()
+      const rollMs = Math.min(duration, 280)
+      let frame = 0
+      const tick = (now: number) => {
+        const t = Math.min(1, (now - start) / rollMs)
+        const eased = 1 - Math.pow(1 - t, 3)
+        setDisplay(Math.round(from + (to - from) * eased))
+        if (t < 1) frame = requestAnimationFrame(tick)
+      }
+      frame = requestAnimationFrame(tick)
+      return () => {
+        cancelAnimationFrame(frame)
+        window.clearTimeout(pulseTimer)
+      }
     }
 
     prev.current = value
