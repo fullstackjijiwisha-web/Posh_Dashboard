@@ -450,6 +450,85 @@ export interface PackExport {
   recipient: string
 }
 
+
+/**
+ * A document generated from a template and filed on the case.
+ *
+ * Carries the same custody metadata as evidence, and for the same reason: a notice is
+ * the thing a party will later say they never received, so who issued it, when, and to
+ * whom has to survive the argument.
+ */
+export interface GeneratedDocument {
+  id: string
+  templateId: string
+  title: string
+  audience: string
+  /** The rendered letter, as issued. */
+  body: string
+  /** Merge values the sender supplied, kept so the document can be explained. */
+  values: Record<string, string>
+  hash: string
+  createdAt: string
+  createdBy: string
+  createdByName: string
+  createdByRole: string
+  /** Set once the document has actually been sent, not merely drafted. */
+  issuedAt: string | null
+  issuedTo: string | null
+  channel: 'Email' | 'Letter' | 'Portal notice' | 'In person' | null
+  acknowledged: boolean
+  custody: CustodyEntry[]
+}
+
+/** A single attributed line in the minutes. */
+export interface MinuteLine {
+  id: string
+  /** Who spoke. A minute without attribution is not evidence of who said what. */
+  speaker: string
+  speakerRole: string
+  text: string
+  /** True when captured by the transcription stub and not yet confirmed by a human. */
+  machineCaptured?: boolean
+}
+
+export interface MinutesSection {
+  id: string
+  heading: string
+  /** Free prose for narrative sections. */
+  body: string
+  /** Attributed lines for submissions and questions. */
+  lines: MinuteLine[]
+}
+
+/**
+ * Minutes of a sitting.
+ *
+ * Finalising locks them. A later change does not edit the locked version — it creates a
+ * new one and keeps the old, because the version the committee signed off is the version
+ * that matters if the finding is challenged.
+ */
+export interface HearingMinutes {
+  id: string
+  caseId: string
+  hearingId: string
+  version: number
+  status: 'Draft' | 'Final'
+  sections: MinutesSection[]
+  present: string[]
+  apologies: string[]
+  quorumMet: boolean
+  createdAt: string
+  updatedAt: string
+  finalisedAt: string | null
+  finalisedBy: string | null
+  hash: string | null
+  /** Sign-off per member once circulated. */
+  confirmations: Array<{ memberId: string; at: string; confirmed: boolean }>
+  circulatedAt: string | null
+  /** Id of the version this supersedes. */
+  supersedes: string | null
+}
+
 /** Everything the workflow layer knows about one case. */
 export interface CaseFlow {
   caseId: string
@@ -466,6 +545,8 @@ export interface CaseFlow {
   feedback: ProcessFeedback | null
   advisoryNotes: AdvisoryNote[]
   packExports: PackExport[]
+  documents: GeneratedDocument[]
+  minutes: HearingMinutes[]
   /** True for cases raised through the in-app complaint form during this session. */
   raisedInSession: boolean
 }

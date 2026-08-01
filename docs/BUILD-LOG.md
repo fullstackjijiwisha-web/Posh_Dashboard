@@ -402,3 +402,92 @@ item sits **after** every hook, so hook order cannot depend on whether it resolv
 - Seeded digests are hydrated once on first mount, because seeding is synchronous and Web
   Crypto is not. After that they are stored and never recomputed — a digest refreshed on
   every load would always match and prove nothing.
+
+---
+
+## Phase 6 — Documents, minutes and correspondence
+
+*Section 3 of the prompt (transcription) was dropped on the user's instruction, along with
+every AI surface. Sections 1, 2 and 4 built in full.*
+
+### Plan
+
+Three surfaces, all on the case record so nothing has to be found in a second place:
+
+1. **A template library** — nine statutory documents, merge fields prefilled from the case,
+   a live preview of the letter as it will read, and a vault copy hashed at filing.
+2. **A minute book** — attributed lines, a quorum snapshot, finalise-and-lock, versions,
+   circulation and per-member confirmation.
+3. **A correspondence thread** — the seeded log and anything issued in this session in one
+   chronological sequence, with an explicit confirm step before anything is served.
+
+### What was built
+
+**`lib/documents/templates.ts`** (already present from an earlier sitting, extended in use,
+not rewritten). Nine templates: acknowledgement, notice to respondent, notice of hearing,
+witness summons, request for further evidence, interim relief recommendation, findings and
+recommendation, and the two outcome notifications.
+
+**`components/documents/DocumentComposer.tsx`** — three columns: library, merge fields,
+live preview. Required fields are listed by name above the sheet and the file button stays
+disabled until they are filled.
+
+**`components/documents/IssueDialog.tsx`** — the confirm step. Recipient, channel, the
+letter as filed, its digest, and a tick that has to be set before *Issue* enables.
+
+**`components/documents/MinutesEditor.tsx`** — five standing headings; *Submissions* and
+*Questions put* record line by line against a named speaker. Attendance drives
+`sittingQuorumTests`, and the result is frozen into the minutes. Finalising hashes and
+locks; revising opens v2 and keeps v1 on the file.
+
+**`pages/Cases.tsx`** — wired into three existing tabs. Nothing was removed: the
+Proceedings table gained a minutes button beside its existing badge, the Documents tab
+gained a strip above the existing table, and Communications gained a Thread view with the
+original table still one click away under a Thread/Table toggle.
+
+### Standing rules
+
+- **Rule 3 — no invented legal content.** Every provision cited in a template already
+  existed in `statutory.ts` or the Help centre. Every date is computed by the same
+  calculators the compliance clocks use, so a notice cannot state a deadline the case
+  record disagrees with. Facts only a human knows — the allegation as put, the measure
+  recommended — are required merge fields, and the composer refuses to file without them.
+  The minutes editor generates no prose at all.
+- **Rule 1 — vocabulary.** The bench, the sitting, carriage, the record, service, the
+  minute book. Nothing softened.
+- **Rule 2 — nothing broken.** The quorum engine is *consumed* here, not reimplemented.
+  Verified after the change: bench language on Committee, the annual return, the six
+  compliance clocks, the permission matrix (HR SPOC is offered no drafting control), and
+  the workflow machine.
+- **Rule 4 — accessibility.** Dialogs carry `role="dialog"`, `aria-modal`, a label and
+  Escape-to-close, and take focus on open. Selection is marked by a tick as well as a
+  border; "Required" is spelled out, never a red asterisk; quorum results read "met" /
+  "not met" beside the icon. Every dialog has its own keyframes carrying its centring
+  transform, and all of them are switched off under `prefers-reduced-motion`.
+- **Rule 5 — no new dependencies.** None added.
+
+### Verified
+
+26 checks driven in a browser, all passing, **zero console errors**. Typecheck clean,
+production build clean.
+
+Covered: the composer refusing to file with a required field empty; the preview updating
+live; `Rule 7(1)` and the computed ten-working-day reply window appearing in the letter;
+issue staying disabled until the tick is set; the issued letter appearing on the Documents
+tab with its digest and in the thread with its body; finalise blocked on empty minutes;
+save, finalise, lock, circulate, confirm, and revise-to-v2-keeping-v1; the version showing
+on the proceedings row; **HR SPOC offered no drafting control**; and the whole record
+surviving a reload.
+
+### Deviations
+
+- **`lib/documents/records.ts` was deleted.** It duplicated types the workflow layer
+  already had (`GeneratedDocument`, `HearingMinutes`); keeping both would have meant two
+  models of the same thing. The workflow layer's version won because the store was already
+  built against it.
+- **Delivery state is not simulated.** An issued document reads *Delivered*. Modelling
+  bounces and read receipts would mean inventing a mail transport. **TODO: revisit** when
+  there is one.
+- **Minutes are per-sitting, keyed to the listed hearings.** Sittings scheduled through the
+  workflow in-session appear in the Workflow tab; the minute book is reached from the
+  Proceedings list.

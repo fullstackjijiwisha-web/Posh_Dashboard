@@ -1,13 +1,18 @@
 import { useCallback, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
+  ArrowDownLeft,
   ArrowLeft,
+  ArrowUpRight,
   Check,
   CheckCircle2,
   ChevronRight,
   Clock,
   Copy,
   Download,
+  FileText,
+  NotebookPen,
+  Send,
   ShieldCheck,
   Eye,
   Lock,
@@ -40,7 +45,12 @@ import { StagePill } from '../components/ui/StagePill'
 import { ScrollTabs } from '../components/ui/ScrollTabs'
 import { PackDialog } from '../components/defensibility/PackDialog'
 import { ComplianceClock } from '../components/ui/ComplianceClock'
+import { DocumentComposer } from '../components/documents/DocumentComposer'
+import { IssueDialog } from '../components/documents/IssueDialog'
+import { MinutesEditor } from '../components/documents/MinutesEditor'
+import { shortHash } from '../lib/defensibility/hash'
 import './CaseWorkspace.css'
+import '../components/documents/Documents.css'
 
 const ICON = { size: 16, strokeWidth: 1.5 } as const
 const ICON_SM = { size: 14, strokeWidth: 1.5 } as const
@@ -190,6 +200,16 @@ export function CasesPage() {
   const [selectedEvidence, setSelectedEvidence] = useState<string | null>(null)
   const [packOpen, setPackOpen] = useState(false)
 
+  /* Phase 6 — the document surfaces. Each is a dialog over the record, so the tab the
+     reader was on is still behind it when they close. `issuing` holds a document id
+     rather than the document itself: the store is the source of truth, and a captured
+     object would freeze at the moment it was clicked. */
+  const [composerOpen, setComposerOpen] = useState(false)
+  const [issuingId, setIssuingId] = useState<string | null>(null)
+  const [minutesFor, setMinutesFor] = useState<string | null>(null)
+  const [openThread, setOpenThread] = useState<string | null>(null)
+  const [commsView, setCommsView] = useState<'thread' | 'table'>('thread')
+
   // The store's list covers both the seeded caseload and anything raised in-session,
   // so a complaint filed a moment ago opens in the same workspace as a fixture case.
   const record = caseFromStore(caseId) ?? caseById(caseId) ?? caseById(FLAGSHIP_CASE_ID) ?? CASES[0]
@@ -244,6 +264,57 @@ export function CasesPage() {
   const comms = communicationsFor(record.id)
   const actions = actionsFor(record.id)
   const audit = auditForCase(record.id)
+
+  /* ── Phase 6 — what the document layer holds for this case ────────── */
+
+  // Documents drafted from the template library, newest first.
+  const generated = [...(flow?.documents ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const issuingDoc = generated.find((d) => d.id === issuingId) ?? null
+  const minutesHearing = hearings.find((h) => h.id === minutesFor) ?? null
+
+  // Only the bench and the administrator draft and serve. HR SPOC and Management hold
+  // neither permission, and the case record is read-only to them.
+  const canDraft = can('workflow:committee') || can('workflow:administer')
+
+  /** Latest minutes taken for a sitting, whatever version. */
+  const minutesOf = (hearingId: string) => {
+    const rows = (flow?.minutes ?? []).filter((m) => m.hearingId === hearingId)
+    return rows.length ? rows.reduce((a, b) => (b.version > a.version ? b : a)) : null
+  }
+
+  /**
+   * The correspondence thread — the seeded log and anything issued in this session, in
+   * one chronological sequence. They are kept distinguishable rather than merged blindly:
+   * a reader should be able to tell what the fixture came with from what they just did.
+   */
+  const thread = [
+    ...comms.map((c) => ({
+      key: c.id,
+      at: c.at,
+      direction: c.direction,
+      channel: c.channel,
+      subject: c.subject,
+      template: c.template,
+      counterparty: c.counterpartyId.includes('complainant') ? 'Complainant' : 'Respondent',
+      delivery: c.deliveryStatus as string,
+      body: null as string | null,
+      session: false,
+    })),
+    ...generated
+      .filter((d) => d.issuedAt)
+      .map((d) => ({
+        key: d.id,
+        at: d.issuedAt!,
+        direction: 'Outbound' as const,
+        channel: d.channel ?? 'Letter',
+        subject: d.title,
+        template: d.title,
+        counterparty: d.issuedTo ?? d.audience,
+        delivery: 'Delivered',
+        body: d.body,
+        session: true,
+      })),
+  ].sort((a, b) => b.at.localeCompare(a.at))
 
   // IC members assigned to this case
   const icMembers = record.assignedIC.map(id => userById(id)).filter(Boolean) as NonNullable<ReturnType<typeof userById>>[]
@@ -627,13 +698,13 @@ export function CasesPage() {
                 </button>
               </div>
               <div className="table-wrap" style={{ maxHeight: 'none' }}>
-                <table className="data" style={{ minWidth: 780 }}>
+                <table className="data" style={{ minWidth: 860 }}>
                   <colgroup>
                     <col style={{ width: 120 }} />
                     <col style={{ width: 130 }} />
                     <col style={{ width: 160 }} />
                     <col style={{ width: 200 }} />
-                    <col style={{ width: 100 }} />
+                    <col style={{ width: 160 }} />
                     <col style={{ width: 90 }} />
                   </colgroup>
                   <thead>
@@ -675,12 +746,33 @@ export function CasesPage() {
                               </span>
                             )}
                           </td>
+                          {/* Minutes. The badge still reports what the fixture came with;
+                              the button opens the minute book, which is the live record. */}
                           <td>
-                            {h.minutesRecorded ? (
-                              <span className="badge badge-completed">Recorded</span>
-                            ) : (
-                              <span className="badge badge-low">Pending</span>
-                            )}
+                            {(() => {
+                              const m = minutesOf(h.id)
+                              return (
+                                <div className="flex flex-col gap-1" style={{ alignItems: 'flex-start' }}>
+                                  {m ? (
+                                    <span className={`badge ${m.status === 'Final' ? 'badge-completed' : 'badge-medium'}`}>
+                                      v{m.version} · {m.status}
+                                    </span>
+                                  ) : h.minutesRecorded ? (
+                                    <span className="badge badge-completed">Recorded</span>
+                                  ) : (
+                                    <span className="badge badge-low">Pending</span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => setMinutesFor(h.id)}
+                                  >
+                                    <NotebookPen {...ICON_SM} />
+                                    {m ? 'Open minutes' : canDraft ? 'Take minutes' : 'View minutes'}
+                                  </button>
+                                </div>
+                              )
+                            })()}
                           </td>
                           <td>
                             <span className={`badge ${h.status === 'Completed' ? 'badge-completed' : h.status === 'Scheduled' ? 'badge-scheduled' : 'badge-adjourned'}`}>
@@ -756,8 +848,62 @@ export function CasesPage() {
             <div className="cw-panel rise">
               <div className="cw-panel-head">
                 <h2 className="cw-panel-title">Documents</h2>
-                <span className="meta-pill">{documents.length} filed</span>
+                <div className="flex items-center gap-3">
+                  <span className="meta-pill">{documents.length + generated.length} filed</span>
+                  {canDraft && (
+                    <button type="button" className="btn btn-primary" onClick={() => setComposerOpen(true)}>
+                      <FileText {...ICON_SM} />
+                      Draft from template
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {/* Documents drafted here, kept above the case file because they are the ones
+                  that may still need issuing. */}
+              {generated.length > 0 && (
+                <div style={{ borderBottom: '1px solid var(--color-border)' }}>
+                  <div
+                    className="doc-col-label"
+                    style={{ padding: 'var(--space-3) var(--space-4) 0' }}
+                  >
+                    Drafted from the library
+                  </div>
+                  {generated.map((d) => (
+                    <div key={d.id} className="gen-doc">
+                      <div className={`cw-file-icon docx`}>DOC</div>
+                      <div className="gen-doc-main">
+                        <div className="gen-doc-title">{d.title}</div>
+                        <div className="gen-doc-meta">
+                          To the {d.audience.toLowerCase()} · drafted by {d.createdByName} ·{' '}
+                          {formatTimestamp(d.createdAt)}
+                        </div>
+                        <div className="gen-doc-meta">
+                          <span className="doc-hash">Digest {shortHash(d.hash)}</span>
+                          {d.issuedAt && (
+                            <>
+                              {' · '}issued to the {(d.issuedTo ?? '').toLowerCase()} by{' '}
+                              {(d.channel ?? '').toLowerCase()} on {formatTimestamp(d.issuedAt)}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="gen-doc-actions">
+                        <span className={`badge ${d.issuedAt ? 'badge-completed' : 'badge-low'}`}>
+                          {d.issuedAt ? 'Issued' : 'Not yet issued'}
+                        </span>
+                        {!d.issuedAt && canDraft && (
+                          <button type="button" className="btn btn-secondary" onClick={() => setIssuingId(d.id)}>
+                            <Send {...ICON_SM} />
+                            Issue
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="table-wrap" style={{ maxHeight: 'none' }}>
                 <table className="data" style={{ minWidth: 700 }}>
                   <colgroup>
@@ -818,9 +964,103 @@ export function CasesPage() {
             <div className="cw-panel rise">
               <div className="cw-panel-head">
                 <h2 className="cw-panel-title">Communications</h2>
-                <span className="meta-pill">{comms.length} on record</span>
+                <div className="flex items-center gap-3">
+                  <span className="meta-pill">{thread.length} on record</span>
+                  {/* Both views on one tab — the thread reads as correspondence, the table
+                      as a register. Neither replaces the other. */}
+                  <div className="doc-view-toggle" role="group" aria-label="Communications view">
+                    <button
+                      type="button"
+                      aria-pressed={commsView === 'thread'}
+                      onClick={() => setCommsView('thread')}
+                    >
+                      Thread
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={commsView === 'table'}
+                      onClick={() => setCommsView('table')}
+                    >
+                      Table
+                    </button>
+                  </div>
+                  {canDraft && (
+                    <button type="button" className="btn btn-primary" onClick={() => setComposerOpen(true)}>
+                      <FileText {...ICON_SM} />
+                      Draft a letter
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="table-wrap" style={{ maxHeight: 'none' }}>
+
+              {commsView === 'thread' && (
+                <div className="thread">
+                  {thread.map((t, i) => {
+                    const out = t.direction === 'Outbound'
+                    const open = openThread === t.key
+                    return (
+                      <div key={t.key} className="thread-item">
+                        <div className="thread-rail">
+                          <span className={`thread-dot ${out ? 'out' : 'in'}`}>
+                            {out ? <ArrowUpRight {...ICON_SM} /> : <ArrowDownLeft {...ICON_SM} />}
+                          </span>
+                          {i < thread.length - 1 && <span className="thread-line" />}
+                        </div>
+                        <div className={`thread-card${t.session ? ' session' : ''}`}>
+                          <div className="thread-meta">
+                            <span>{t.direction}</span>
+                            <span aria-hidden="true">·</span>
+                            <span>{t.channel}</span>
+                            <span aria-hidden="true">·</span>
+                            <span>{t.counterparty}</span>
+                            <span aria-hidden="true">·</span>
+                            <span>{formatTimestamp(t.at)}</span>
+                            {t.session && <span className="badge badge-completed">Issued here</span>}
+                          </div>
+                          <div className="thread-subject">{t.subject}</div>
+                          {t.body ? (
+                            <>
+                              <p className={`thread-excerpt${open ? ' open' : ''}`}>{t.body}</p>
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ alignSelf: 'flex-start' }}
+                                aria-expanded={open}
+                                onClick={() => setOpenThread(open ? null : t.key)}
+                              >
+                                {open ? 'Collapse' : 'Read in full'}
+                              </button>
+                            </>
+                          ) : (
+                            <p className="thread-excerpt">
+                              Template: {t.template}. The body of this correspondence is held on the
+                              case file and is not loaded into the thread.
+                            </p>
+                          )}
+                          <div className="thread-meta">
+                            {t.delivery === 'Acknowledged' || t.delivery === 'Delivered' ? (
+                              <>
+                                <Check size={12} strokeWidth={2} />
+                                {t.delivery}
+                              </>
+                            ) : (
+                              <>
+                                <Clock size={12} strokeWidth={2} />
+                                {t.delivery}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              <div
+                className="table-wrap"
+                style={{ maxHeight: 'none', display: commsView === 'table' ? undefined : 'none' }}
+              >
                 <table className="data" style={{ minWidth: 700 }}>
                   <colgroup>
                     <col style={{ width: 100 }} />
@@ -970,6 +1210,31 @@ export function CasesPage() {
           onGenerated={(meta) =>
             recordPackExport(record.id, { ...meta, recipient: '' })
           }
+        />
+      )}
+
+      {/* ═══════════════════ Documents, minutes, correspondence ═══════════════════ */}
+      {composerOpen && flow && (
+        <DocumentComposer
+          record={record}
+          flow={flow}
+          onClose={() => setComposerOpen(false)}
+          // Straight from drafting into the confirm step — the commonest path, and it
+          // keeps the letter in front of the sender rather than filing it out of sight.
+          onFiled={(id) => setIssuingId(id)}
+        />
+      )}
+
+      {issuingDoc && (
+        <IssueDialog caseId={record.id} doc={issuingDoc} onClose={() => setIssuingId(null)} />
+      )}
+
+      {minutesFor && minutesHearing && flow && (
+        <MinutesEditor
+          record={record}
+          flow={flow}
+          hearing={minutesHearing}
+          onClose={() => setMinutesFor(null)}
         />
       )}
 

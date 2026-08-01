@@ -36,6 +36,7 @@ import {
   type EvidenceState,
   type VerifyResult,
 } from '../evidence/model'
+import { hashOf } from '../defensibility/hash'
 import {
   STAGE_META,
   isWorkflowTerminal,
@@ -49,6 +50,8 @@ import {
   type FlowNotification,
   type FlowRecommendation,
   type ProcessFeedback,
+  type GeneratedDocument,
+  type HearingMinutes,
   type WorkflowStage,
 } from './types'
 
@@ -292,6 +295,8 @@ function seedFlow(record: Case): CaseFlow {
     feedback,
     advisoryNotes,
     packExports: [],
+    documents: [],
+    minutes: [],
     raisedInSession: false,
   }
 }
@@ -453,6 +458,8 @@ function loadState(): Persisted {
       // Snapshots written before that carry the old three-value `status` only, so the
       // richer fields are filled here rather than guarded at every call site.
       f.evidence = (f.evidence ?? []).map(upgradeEvidence)
+      f.documents ??= []
+      f.minutes ??= []
       f.evidence ??= []
       f.evidenceRequests ??= []
       f.hearings ??= []
@@ -528,6 +535,30 @@ export interface WorkflowState {
   logEvidenceAccess: (caseId: string, evidenceId: string, action: CustodyAction, detail: string) => void
   /** Recomputes the digest and compares it with the one fixed at intake. */
   checkEvidenceIntegrity: (caseId: string, evidenceId: string) => Promise<VerifyResult | null>
+  /* --- Documents and minutes (Phase 6) --- */
+  /** Files a generated document in the vault with custody metadata. */
+  fileDocument: (
+    caseId: string,
+    doc: { templateId: string; title: string; audience: string; body: string; values: Record<string, string> },
+  ) => Promise<string>
+  /** Records that a document was actually issued, to whom and by what channel. */
+  issueDocument: (
+    caseId: string,
+    documentId: string,
+    to: string,
+    channel: 'Email' | 'Letter' | 'Portal notice' | 'In person',
+  ) => void
+  /** Creates or updates a draft. Finalised minutes are never edited in place. */
+  saveMinutes: (caseId: string, minutes: HearingMinutes) => void
+  /** Locks a draft and hashes it. */
+  finaliseMinutes: (caseId: string, minutesId: string) => Promise<void>
+  /** Opens a new version from a finalised one, retaining the original. */
+  reviseMinutes: (caseId: string, minutesId: string) => string | null
+  /** Sends finalised minutes to the panel for sign-off. */
+  circulateMinutes: (caseId: string, minutesId: string) => void
+  /** A member confirms the minutes are an accurate record. */
+  confirmMinutes: (caseId: string, minutesId: string, confirmed: boolean) => void
+
   /** Files new material, hashing it before it lands. */
   uploadEvidence: (
     caseId: string,
@@ -1071,6 +1102,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         feedback: null,
         advisoryNotes: [],
         packExports: [],
+        documents: [],
+        minutes: [],
         raisedInSession: true,
       }
 
@@ -1352,6 +1385,244 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     [actorId, actorName, actorRole],
   )
 
+  /* ------------------------------------------------------------------ *
+   * Documents and minutes
+   * ------------------------------------------------------------------ */
+
+  const fileDocument = useCallback(
+    async (
+      caseId: string,
+      doc: { templateId: string; title: string; audience: string; body: string; values: Record<string, string> },
+    ) => {
+      const now = new Date().toISOString()
+      const id = `${caseId}-doc-${Date.now()}`
+      // Hashed on filing, like evidence, so an issued notice can be shown to be the one
+      // that was actually sent rather than a later reconstruction of it.
+      const hash = await hashOf({ templateId: doc.templateId, body: doc.body, createdAt: now, createdBy: actorId })
+      const entry: GeneratedDocument = {
+        id,
+        ...doc,
+        hash,
+        createdAt: now,
+        createdBy: actorId,
+        createdByName: actorName,
+        createdByRole: actorRole,
+        issuedAt: null,
+        issuedTo: null,
+        channel: null,
+        acknowledged: false,
+        custody: [
+          {
+            id: `${id}-c0`,
+            at: now,
+            actorId,
+            actorName,
+            actorRole,
+            action: 'Received',
+            detail: `Generated from the ${doc.title} template and filed in the vault.`,
+          },
+        ],
+      }
+      setState((prev) => {
+        const flow = prev.flows[caseId]
+        if (!flow) return prev
+        return {
+          ...prev,
+          flows: { ...prev.flows, [caseId]: { ...flow, documents: [...(flow.documents ?? []), entry] } },
+        }
+      })
+      return id
+    },
+    [actorId, actorName, actorRole],
+  )
+
+  const issueDocument = useCallback(
+    (caseId: string, documentId: string, to: string, channel: 'Email' | 'Letter' | 'Portal notice' | 'In person') => {
+      const now = new Date().toISOString()
+      setState((prev) => {
+        const flow = prev.flows[caseId]
+        if (!flow) return prev
+        return {
+          ...prev,
+          flows: {
+            ...prev.flows,
+            [caseId]: {
+              ...flow,
+              documents: (flow.documents ?? []).map((d) =>
+                d.id === documentId
+                  ? {
+                      ...d,
+                      issuedAt: now,
+                      issuedTo: to,
+                      channel,
+                      custody: [
+                        ...d.custody,
+                        {
+                          id: `${d.id}-c-${Date.now()}`,
+                          at: now,
+                          actorId,
+                          actorName,
+                          actorRole,
+                          action: 'State changed' as CustodyAction,
+                          detail: `Issued to ${to} by ${channel.toLowerCase()}.`,
+                        },
+                      ],
+                    }
+                  : d,
+              ),
+            },
+          },
+        }
+      })
+    },
+    [actorId, actorName, actorRole],
+  )
+
+  const saveMinutes = useCallback((caseId: string, minutes: HearingMinutes) => {
+    setState((prev) => {
+      const flow = prev.flows[caseId]
+      if (!flow) return prev
+      const list = flow.minutes ?? []
+      const existing = list.find((m) => m.id === minutes.id)
+      // Finalised minutes are immutable. A save against one is dropped rather than
+      // silently rewriting a record the committee has already signed off.
+      if (existing?.status === 'Final') return prev
+      const next = { ...minutes, updatedAt: new Date().toISOString() }
+      return {
+        ...prev,
+        flows: {
+          ...prev.flows,
+          [caseId]: {
+            ...flow,
+            minutes: existing ? list.map((m) => (m.id === next.id ? next : m)) : [...list, next],
+          },
+        },
+      }
+    })
+  }, [])
+
+  const finaliseMinutes = useCallback(
+    async (caseId: string, minutesId: string) => {
+      const target = state.flows[caseId]?.minutes?.find((m) => m.id === minutesId)
+      if (!target || target.status === 'Final') return
+      const now = new Date().toISOString()
+      const hash = await hashOf({
+        sections: target.sections,
+        present: target.present,
+        hearingId: target.hearingId,
+        version: target.version,
+      })
+      setState((prev) => {
+        const flow = prev.flows[caseId]
+        if (!flow) return prev
+        return {
+          ...prev,
+          flows: {
+            ...prev.flows,
+            [caseId]: {
+              ...flow,
+              minutes: (flow.minutes ?? []).map((m) =>
+                m.id === minutesId
+                  ? { ...m, status: 'Final' as const, finalisedAt: now, finalisedBy: actorName, hash }
+                  : m,
+              ),
+            },
+          },
+        }
+      })
+    },
+    [state.flows, actorName],
+  )
+
+  const reviseMinutes = useCallback(
+    (caseId: string, minutesId: string) => {
+      const source = state.flows[caseId]?.minutes?.find((m) => m.id === minutesId)
+      if (!source) return null
+      const id = `${caseId}-min-${Date.now()}`
+      const now = new Date().toISOString()
+      // The finalised version is kept. This is a new draft that supersedes it.
+      const next: HearingMinutes = {
+        ...source,
+        id,
+        version: source.version + 1,
+        status: 'Draft',
+        createdAt: now,
+        updatedAt: now,
+        finalisedAt: null,
+        finalisedBy: null,
+        hash: null,
+        confirmations: [],
+        circulatedAt: null,
+        supersedes: source.id,
+      }
+      setState((prev) => {
+        const flow = prev.flows[caseId]
+        if (!flow) return prev
+        return { ...prev, flows: { ...prev.flows, [caseId]: { ...flow, minutes: [...(flow.minutes ?? []), next] } } }
+      })
+      return id
+    },
+    [state.flows],
+  )
+
+  const circulateMinutes = useCallback(
+    (caseId: string, minutesId: string) => {
+      const now = new Date().toISOString()
+      setState((prev) => {
+        const flow = prev.flows[caseId]
+        if (!flow) return prev
+        return {
+          ...prev,
+          flows: {
+            ...prev.flows,
+            [caseId]: {
+              ...flow,
+              minutes: (flow.minutes ?? []).map((m) => (m.id === minutesId ? { ...m, circulatedAt: now } : m)),
+            },
+          },
+        }
+      })
+      notify(
+        ['presiding_officer', 'ic_member', 'external_member'],
+        caseId,
+        `${caseId} - minutes circulated for confirmation`,
+        'Minutes of a sitting have been circulated. Confirm they are an accurate record.',
+      )
+    },
+    [notify],
+  )
+
+  const confirmMinutes = useCallback(
+    (caseId: string, minutesId: string, confirmed: boolean) => {
+      const now = new Date().toISOString()
+      setState((prev) => {
+        const flow = prev.flows[caseId]
+        if (!flow) return prev
+        return {
+          ...prev,
+          flows: {
+            ...prev.flows,
+            [caseId]: {
+              ...flow,
+              minutes: (flow.minutes ?? []).map((m) =>
+                m.id === minutesId
+                  ? {
+                      ...m,
+                      confirmations: [
+                        ...m.confirmations.filter((c) => c.memberId !== actorId),
+                        { memberId: actorId, at: now, confirmed },
+                      ],
+                    }
+                  : m,
+              ),
+            },
+          },
+        }
+      })
+    },
+    [actorId],
+  )
+
   const markNotificationsRead = useCallback(() => {
     setState((prev) => ({
       ...prev,
@@ -1398,6 +1669,13 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       logEvidenceAccess,
       checkEvidenceIntegrity,
       uploadEvidence,
+      fileDocument,
+      issueDocument,
+      saveMinutes,
+      finaliseMinutes,
+      reviseMinutes,
+      circulateMinutes,
+      confirmMinutes,
       submitComplaint,
       markNotificationsRead,
       resetWorkflow,
@@ -1427,6 +1705,13 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       logEvidenceAccess,
       checkEvidenceIntegrity,
       uploadEvidence,
+      fileDocument,
+      issueDocument,
+      saveMinutes,
+      finaliseMinutes,
+      reviseMinutes,
+      circulateMinutes,
+      confirmMinutes,
       submitComplaint,
       markNotificationsRead,
       resetWorkflow,
