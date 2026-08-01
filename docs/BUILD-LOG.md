@@ -326,4 +326,79 @@ workspace — the `InquiryOnly` route guard turns them away first.
 - **Minutes print whatever exists on a sitting today.** Phase 10's structured editor will
   give them per-speaker attribution and versioning; the pack will pick that up for free.
 - **No verification UI yet.** The pack states its digests; recomputing them to prove the
-  document is unaltered is W5 (the Ledger).
+  document is unaltered is W5 (the Ledger). *(Closed in Phase 5 for evidence items.)*
+
+---
+
+## Phase 5 — Evidence integrity and the document layer (`PROMPT 5`)
+
+### The thing that was actually wrong
+
+Phase 4 hashed evidence *at export time*. That reads like integrity and is not: a digest
+derived from the record at the moment you print it will always match the record, because
+it came from it. It can never disagree, so it can never detect anything.
+
+Phase 5 moves the digest to **intake** and never recomputes it. `verifyIntegrity` hashes
+the item as it stands now and compares. That comparison can fail, which is the only
+reason it is worth doing.
+
+### What was built
+
+- `lib/evidence/model.ts` — the admission state machine (Submitted → Under review →
+  Admitted / Not admitted), custody types, intake hashing, verification, upload
+  validation. A refusal without a reason is rejected **in the store**, not in a form.
+- `lib/evidence/download.ts` — watermarked release. Diagonal, low opacity, repeated down
+  the page so a cropped screenshot still carries it, naming the recipient, their role,
+  the timestamp and the s.16 restriction.
+- `components/evidence/EvidencePanel.tsx` — preview, integrity, provenance, admission,
+  custody. Opening it **is** a read and is recorded: under s.16 the question asked
+  afterwards is who *saw* the file.
+- `components/evidence/EvidenceDropZone.tsx` — drag-and-drop with a keyboard path,
+  per-file validation, and errors that name the file, the problem and the limit.
+- `pages/EvidenceRegister.tsx` — rebuilt: four filters (search, case, state, party),
+  multi-select with bulk verify / admit / refuse, exhibits separated from filed material.
+
+Evidence gained fields by **extension**, not replacement: eleven screens read the old
+three-value `status`, so `state` became the source of truth and the store derives
+`status` from it in one place. Nothing downstream needed touching.
+
+### Verified by driving it
+
+- 48 items, **48 of 48 digests fixed** at intake
+- Custody grows on real events: 1 → 2 (preview) → 3 (verify) → 6 (state changes,
+  download). Nothing in the store edits or deletes an entry.
+- State transitions work; **E-01 issued on admission**; refusal blocked without a reason;
+  the reason then shows on the item
+- Watermarked download names the exhibit: `POSH-2026-0158-E-01-….pdf`
+- Upload rejections are specific: *"huge.pdf is 26.0 MB. The limit is 25 MB"*,
+  *"thing.exe is a X-MSDOWNLOAD file. Accepted: PDF, PNG, …"*
+- **Tamper test — the one that matters.** Edited a stored item's content directly in
+  localStorage, left its digest untouched, reloaded, and verified: *"Tamper warning — the
+  item no longer matches its intake digest"*, both hashes displayed side by side, and
+  `DIGEST MISMATCH` written to the custody trail.
+
+Typecheck clean, build passes, lint **zero errors**, browser run **zero console errors**.
+
+### A bug found by driving it
+
+**The slide-over never updated.** It took the item as a prop, captured at click time, so
+admitting an item or appending custody changed the store while the panel went on
+rendering its copy — custody stuck at 1, the state pill never moved, the refusal reason
+never appeared. It now takes an *id* and selects the item live. The guard for a missing
+item sits **after** every hook, so hook order cannot depend on whether it resolved.
+
+### Deviations and what is still not real
+
+- **Digests cover metadata, not file bytes.** The fixture has no bytes. Files uploaded in
+  this session are held as object URLs and do preview, but they are session-scoped and
+  the digest still covers the record. Swapping to `crypto.subtle.digest` over an
+  `ArrayBuffer` is a one-line change in `computeHash`; the comparison logic is identical.
+- **Watermarked download produces a cover sheet**, not the original file, for the same
+  reason. It is real, it carries the watermark and the digest, and it says what it is
+  rather than pretending to hand over a document that does not exist.
+- **Bulk export / zip not built.** Bulk verify, admit and refuse are; a zip would need a
+  compression dependency for material that does not exist yet. **TODO: revisit** with
+  real files.
+- Seeded digests are hydrated once on first mount, because seeding is synchronous and Web
+  Crypto is not. After that they are stored and never recomputed — a digest refreshed on
+  every load would always match and prove nothing.

@@ -29,6 +29,14 @@ import { casesVisibleTo, useRole } from '../role-context'
 import { dateNDaysAgo } from '../data/statutory'
 import { actionsFor, transitionById, type WorkflowTransition } from './machine'
 import {
+  computeHash,
+  verifyIntegrity,
+  type CustodyEntry,
+  type CustodyAction,
+  type EvidenceState,
+  type VerifyResult,
+} from '../evidence/model'
+import {
   STAGE_META,
   isWorkflowTerminal,
   type AdminAccount,
@@ -138,25 +146,65 @@ function seedFlow(record: Case): CaseFlow {
   const history = seedHistory(record, stage)
   const past = (s: WorkflowStage) => history.some((h) => h.stage === s)
 
+  const admitted = past('evidence_verified')
+  const seedItem = (
+    n: number,
+    label: string,
+    note: string,
+    daysAgo: number,
+    sizeKb: number,
+    mimeType: string,
+  ): FlowEvidenceItem => {
+    const state: EvidenceState = admitted ? 'Admitted' : 'Submitted'
+    const at = ts(daysAgo)
+    return upgradeEvidence({
+      id: `${record.id}-ev${n}`,
+      label,
+      note,
+      uploadedBy: 'u-emp',
+      uploadedAt: at,
+      supplementary: false,
+      status: statusFor(state, false),
+      state,
+      stateReason: null,
+      hash: '',
+      sizeKb,
+      mimeType,
+      exhibitNo: admitted ? `E-${String(n).padStart(2, '0')}` : null,
+      custody: [
+        {
+          id: `${record.id}-ev${n}-c0`,
+          at,
+          actorId: 'u-emp',
+          actorName: 'Ananya Pillai',
+          actorRole: ROLE_LABEL.employee,
+          action: 'Received' as CustodyAction,
+          detail: 'Filed by the complainant.',
+        },
+        ...(admitted
+          ? [
+              {
+                id: `${record.id}-ev${n}-c1`,
+                at: ts(Math.max(0, daysAgo - 6)),
+                actorId: 'u-ic',
+                actorName: 'Vikram Mehta',
+                actorRole: ROLE_LABEL.ic_member,
+                action: 'State changed' as CustodyAction,
+                detail: 'Admitted to the record after examination by the committee.',
+              },
+            ]
+          : []),
+      ],
+      supersedes: null,
+      superseded: false,
+      version: 1,
+      objectUrl: null,
+    })
+  }
+
   const evidence: FlowEvidenceItem[] = [
-    {
-      id: `${record.id}-ev1`,
-      label: 'Complaint annexure — written account',
-      note: 'Filed with the original complaint.',
-      uploadedBy: 'u-emp',
-      uploadedAt: ts(record.daysElapsed),
-      supplementary: false,
-      status: past('evidence_verified') ? 'Verified' : 'Pending verification',
-    },
-    {
-      id: `${record.id}-ev2`,
-      label: 'Message log export',
-      note: 'Exported from the corporate messaging archive.',
-      uploadedBy: 'u-emp',
-      uploadedAt: ts(record.daysElapsed - 1),
-      supplementary: false,
-      status: past('evidence_verified') ? 'Verified' : 'Pending verification',
-    },
+    seedItem(1, 'Complaint annexure — written account', 'Filed with the original complaint.', record.daysElapsed, 248, 'application/pdf'),
+    seedItem(2, 'Message log export', 'Exported from the corporate messaging archive.', record.daysElapsed - 1, 1120, 'text/plain'),
   ]
 
   const hearings: FlowHearing[] = past('hearing_scheduled')
@@ -348,6 +396,42 @@ function seedState(): Persisted {
   }
 }
 
+/**
+ * `status` is derived from `state`, in one place.
+ *
+ * Eleven screens read the old three-value `status`. Rather than edit all of them, the
+ * store keeps it in step with the real state whenever the state changes — so the two
+ * cannot drift, which is what would happen if each mutator set both by hand.
+ */
+function statusFor(state: EvidenceState, superseded: boolean): FlowEvidenceItem['status'] {
+  if (superseded) return 'Superseded'
+  return state === 'Admitted' ? 'Verified' : 'Pending verification'
+}
+
+/** Fills the Phase 5 fields on an item written before they existed. */
+function upgradeEvidence(e: FlowEvidenceItem): FlowEvidenceItem {
+  const state: EvidenceState =
+    e.state ?? (e.status === 'Verified' ? 'Admitted' : e.status === 'Superseded' ? 'Submitted' : 'Submitted')
+  return {
+    ...e,
+    state,
+    stateReason: e.stateReason ?? null,
+    // Left empty deliberately: the digest is hydrated once, on mount, so it is fixed
+    // before anything can be compared against it.
+    hash: e.hash ?? '',
+    sizeKb: e.sizeKb ?? 0,
+    mimeType: e.mimeType ?? 'application/pdf',
+    uploadedByName: e.uploadedByName ?? userById(e.uploadedBy)?.name ?? 'Unknown',
+    uploadedByRole: e.uploadedByRole ?? (userById(e.uploadedBy) ? ROLE_LABEL[userById(e.uploadedBy)!.role] : 'Unknown'),
+    exhibitNo: e.exhibitNo ?? null,
+    custody: e.custody ?? [],
+    supersedes: e.supersedes ?? null,
+    superseded: e.superseded ?? e.status === 'Superseded',
+    version: e.version ?? 1,
+    objectUrl: e.objectUrl ?? null,
+  }
+}
+
 function loadState(): Persisted {
   if (typeof window === 'undefined') return seedState()
   try {
@@ -365,6 +449,10 @@ function loadState(): Persisted {
       const f = parsed.flows[id]
       f.advisoryNotes ??= []
       f.packExports ??= []
+      // Evidence gained a state machine, a digest and a custody trail in Phase 5.
+      // Snapshots written before that carry the old three-value `status` only, so the
+      // richer fields are filled here rather than guarded at every call site.
+      f.evidence = (f.evidence ?? []).map(upgradeEvidence)
       f.evidence ??= []
       f.evidenceRequests ??= []
       f.hearings ??= []
@@ -432,6 +520,20 @@ export interface WorkflowState {
   createAdminAccount: (input: { name: string; email: string; department: string }) => void
   addAdvisoryNote: (caseId: string, text: string, concern: boolean) => void
   recordPackExport: (caseId: string, meta: { rootHash: string; redacted: boolean; pages: number; recipient: string }) => void
+
+  /* --- Evidence (Phase 5) --- */
+  /** Moves an item's admission state. A refusal requires a reason. */
+  setEvidenceState: (caseId: string, evidenceId: string, state: EvidenceState, reason?: string) => void
+  /** Appends to the append-only custody trail. Reads count. */
+  logEvidenceAccess: (caseId: string, evidenceId: string, action: CustodyAction, detail: string) => void
+  /** Recomputes the digest and compares it with the one fixed at intake. */
+  checkEvidenceIntegrity: (caseId: string, evidenceId: string) => Promise<VerifyResult | null>
+  /** Files new material, hashing it before it lands. */
+  uploadEvidence: (
+    caseId: string,
+    files: Array<{ name: string; sizeKb: number; mimeType: string; objectUrl?: string | null }>,
+    opts?: { supplementary?: boolean; supersedesId?: string },
+  ) => Promise<void>
   submitComplaint: (input: NewComplaintInput) => string
   markNotificationsRead: () => void
   resetWorkflow: () => void
@@ -442,6 +544,46 @@ const WorkflowContext = createContext<WorkflowState | null>(null)
 export function WorkflowProvider({ children }: { children: ReactNode }) {
   const { currentRole, currentUser } = useRole()
   const [state, setState] = useState<Persisted>(loadState)
+
+  /**
+   * Fixes the intake digest for any item that does not have one.
+   *
+   * Seeded evidence cannot be hashed while the fixture is built, because Web Crypto is
+   * async and seeding is not. So it happens once, here, on first mount — and only for
+   * items with no digest. After that the value is stored and never recomputed, which is
+   * the whole point: a digest that is refreshed every load would always match, and would
+   * prove nothing.
+   */
+  useEffect(() => {
+    const missing = Object.values(state.flows).flatMap((f) =>
+      (f.evidence ?? []).filter((e) => !e.hash).map((e) => ({ caseId: f.caseId, e })),
+    )
+    if (!missing.length) return
+    let cancelled = false
+    void (async () => {
+      const hashed = await Promise.all(
+        missing.map(async ({ caseId, e }) => ({ caseId, id: e.id, hash: await computeHash(e as never) })),
+      )
+      if (cancelled) return
+      setState((prev) => {
+        const flows = { ...prev.flows }
+        for (const { caseId, id, hash } of hashed) {
+          const flow = flows[caseId]
+          if (!flow) continue
+          flows[caseId] = {
+            ...flow,
+            evidence: flow.evidence.map((e) => (e.id === id && !e.hash ? { ...e, hash } : e)),
+          }
+        }
+        return { ...prev, flows }
+      })
+    })()
+    return () => {
+      cancelled = true
+    }
+    // Runs whenever items without a digest appear — on load, and after an upload that
+    // somehow landed without one.
+  }, [state.flows])
 
   useEffect(() => {
     try {
@@ -1016,6 +1158,200 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     [actorId, actorName, actorRole],
   )
 
+  /* ------------------------------------------------------------------ *
+   * Evidence
+   * ------------------------------------------------------------------ */
+
+  /** Appends a custody entry. Nothing in this store removes or edits one. */
+  const appendCustody = useCallback(
+    (caseId: string, evidenceId: string, action: CustodyAction, detail: string) => {
+      setState((prev) => {
+        const flow = prev.flows[caseId]
+        if (!flow) return prev
+        const entry: CustodyEntry = {
+          id: `${evidenceId}-c-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          at: new Date().toISOString(),
+          actorId,
+          actorName,
+          actorRole,
+          action,
+          detail,
+        }
+        return {
+          ...prev,
+          flows: {
+            ...prev.flows,
+            [caseId]: {
+              ...flow,
+              evidence: flow.evidence.map((e) =>
+                e.id === evidenceId ? { ...e, custody: [...(e.custody ?? []), entry] } : e,
+              ),
+            },
+          },
+        }
+      })
+    },
+    [actorId, actorName, actorRole],
+  )
+
+  const logEvidenceAccess = appendCustody
+
+  const setEvidenceState = useCallback(
+    (caseId: string, evidenceId: string, nextState: EvidenceState, reason?: string) => {
+      // A refusal without a recorded reason is the defect that gets an inquiry set
+      // aside, so it is refused here rather than in a form somebody can bypass.
+      const refusalReason = reason?.trim() ?? ''
+      if (nextState === 'Not admitted' && !refusalReason) return
+      setState((prev) => {
+        const flow = prev.flows[caseId]
+        if (!flow) return prev
+        const admittedCount = flow.evidence.filter((e) => e.state === 'Admitted').length
+        return {
+          ...prev,
+          flows: {
+            ...prev.flows,
+            [caseId]: {
+              ...flow,
+              evidence: flow.evidence.map((e) => {
+                if (e.id !== evidenceId) return e
+                // An exhibit number is the record's own citation, so it is issued once,
+                // on admission, and not reissued if the item is later refused.
+                const exhibitNo =
+                  nextState === 'Admitted' && !e.exhibitNo
+                    ? `E-${String(admittedCount + 1).padStart(2, '0')}`
+                    : (e.exhibitNo ?? null)
+                const entry: CustodyEntry = {
+                  id: `${e.id}-c-${Date.now()}`,
+                  at: new Date().toISOString(),
+                  actorId,
+                  actorName,
+                  actorRole,
+                  action: 'State changed',
+                  detail:
+                    nextState === 'Not admitted'
+                      ? `Not admitted to the record. Reason: ${refusalReason}`
+                      : `State set to ${nextState}.`,
+                }
+                return {
+                  ...e,
+                  state: nextState,
+                  stateReason: nextState === 'Not admitted' ? refusalReason : null,
+                  exhibitNo,
+                  status: statusFor(nextState, e.superseded ?? false),
+                  custody: [...(e.custody ?? []), entry],
+                }
+              }),
+            },
+          },
+        }
+      })
+    },
+    [actorId, actorName, actorRole],
+  )
+
+  const checkEvidenceIntegrity = useCallback(
+    async (caseId: string, evidenceId: string) => {
+      const item = state.flows[caseId]?.evidence.find((e) => e.id === evidenceId)
+      if (!item) return null
+      const result = await verifyIntegrity(item as never)
+      appendCustody(
+        caseId,
+        evidenceId,
+        'Integrity verified',
+        result.ok
+          ? 'Digest recomputed and matched the value recorded at intake.'
+          : 'DIGEST MISMATCH - the item differs from the value recorded at intake.',
+      )
+      return result
+    },
+    [state.flows, appendCustody],
+  )
+
+  const uploadEvidence = useCallback(
+    async (
+      caseId: string,
+      files: Array<{ name: string; sizeKb: number; mimeType: string; objectUrl?: string | null }>,
+      opts?: { supplementary?: boolean; supersedesId?: string },
+    ) => {
+      const now = new Date().toISOString()
+      // Hashed before it lands. A digest computed later is derived from the stored
+      // record and therefore proves nothing about what actually arrived.
+      const built = await Promise.all(
+        files.map(async (f, i) => {
+          const base = {
+            id: `${caseId}-ev-${Date.now()}-${i}`,
+            label: f.name,
+            note: opts?.supersedesId
+              ? 'Filed as a replacement for an earlier item.'
+              : opts?.supplementary
+                ? 'Filed in response to a committee request.'
+                : 'Filed on the case.',
+            uploadedBy: actorId,
+            uploadedAt: now,
+            supplementary: !!opts?.supplementary,
+            sizeKb: f.sizeKb,
+            mimeType: f.mimeType,
+          }
+          const hash = await computeHash(base as never)
+          return upgradeEvidence({
+            ...base,
+            status: statusFor('Submitted', false),
+            state: 'Submitted',
+            stateReason: null,
+            hash,
+            uploadedByName: actorName,
+            uploadedByRole: actorRole,
+            exhibitNo: null,
+            supersedes: opts?.supersedesId ?? null,
+            superseded: false,
+            version: 1,
+            objectUrl: f.objectUrl ?? null,
+            custody: [
+              {
+                id: `${base.id}-c0`,
+                at: now,
+                actorId,
+                actorName,
+                actorRole,
+                action: 'Received' as CustodyAction,
+                detail: `Received - ${f.sizeKb} KB. Digest fixed at intake.`,
+              },
+            ],
+          })
+        }),
+      )
+
+      setState((prev) => {
+        const flow = prev.flows[caseId]
+        if (!flow) return prev
+        // A superseded item is never deleted; it stays, marked, with its own trail.
+        const existing = flow.evidence.map((e) =>
+          opts?.supersedesId && e.id === opts.supersedesId
+            ? {
+                ...e,
+                superseded: true,
+                status: 'Superseded' as const,
+                custody: [
+                  ...(e.custody ?? []),
+                  {
+                    id: `${e.id}-c-${Date.now()}`,
+                    at: now,
+                    actorId,
+                    actorName,
+                    actorRole,
+                    action: 'Superseded' as CustodyAction,
+                    detail: 'Replaced by a newer version. Retained on file.',
+                  },
+                ],
+              }
+            : e,
+        )
+        return { ...prev, flows: { ...prev.flows, [caseId]: { ...flow, evidence: [...existing, ...built] } } }
+      })
+    },
+    [actorId, actorName, actorRole],
+  )
+
   const markNotificationsRead = useCallback(() => {
     setState((prev) => ({
       ...prev,
@@ -1058,6 +1394,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       createAdminAccount,
       addAdvisoryNote,
       recordPackExport,
+      setEvidenceState,
+      logEvidenceAccess,
+      checkEvidenceIntegrity,
+      uploadEvidence,
       submitComplaint,
       markNotificationsRead,
       resetWorkflow,
@@ -1083,6 +1423,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       createAdminAccount,
       addAdvisoryNote,
       recordPackExport,
+      setEvidenceState,
+      logEvidenceAccess,
+      checkEvidenceIntegrity,
+      uploadEvidence,
       submitComplaint,
       markNotificationsRead,
       resetWorkflow,

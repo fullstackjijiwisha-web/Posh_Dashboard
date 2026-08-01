@@ -23,6 +23,7 @@
  */
 
 import type { Role } from '../data/types'
+import type { CustodyEntry, EvidenceState } from '../evidence/model'
 
 /* ------------------------------------------------------------------ *
  * Stages
@@ -294,7 +295,39 @@ export interface FlowEvidenceItem {
   uploadedAt: string
   /** Supplementary items are those filed after a committee request for more. */
   supplementary: boolean
+  /**
+   * Legacy display status, kept so the eleven screens that read it keep working.
+   * `state` below is the source of truth; the store keeps this in sync whenever the
+   * state changes, in one place, so the two cannot drift.
+   */
   status: 'Pending verification' | 'Verified' | 'Superseded'
+
+  /* --- Added in Phase 5. Optional so snapshots written before it still load; the
+     store's normaliser fills them on read, so components can rely on them. --- */
+
+  /** Admission state under s.11. The real one. */
+  state?: EvidenceState
+  /** Required whenever the state is 'Not admitted'. */
+  stateReason?: string | null
+  /**
+   * SHA-256 fixed at intake and never recomputed. Verification compares against it —
+   * a digest derived from the record at the moment you check it proves nothing.
+   */
+  hash?: string
+  sizeKb?: number
+  mimeType?: string
+  uploadedByName?: string
+  uploadedByRole?: string
+  /** Exhibit number, assigned only on admission to the record. */
+  exhibitNo?: string | null
+  /** Append-only. Nothing in the store edits or removes an entry. */
+  custody?: CustodyEntry[]
+  /** Id of the item this replaces. The superseded item stays on file. */
+  supersedes?: string | null
+  superseded?: boolean
+  version?: number
+  /** Object URL for a file uploaded this session, so it can be previewed. */
+  objectUrl?: string | null
 }
 
 export interface EvidenceRequest {
