@@ -197,3 +197,35 @@
   .signin-panel { padding: var(--space-6); gap: var(--space-6); }
   .role-chips { grid-template-columns: 1fr; }
 }
+
+/* Returning session — offered, never imposed. */
+.signin-resume {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  margin-top: var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-raised);
+}
+
+.signin-resume-text {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-sm);
+  color: var(--color-primary);
+  min-width: 0;
+  margin-right: auto;
+}
+
+.signin-resume-text span {
+  font-size: var(--text-xs);
+  color: var(--color-secondary-text);
+}
+
+/* The role you are already in, marked so the list says where you stand. */
+.role-chip.current {
+  border-color: var(--color-accent);
+  background: var(--color-accent-tint);
+}

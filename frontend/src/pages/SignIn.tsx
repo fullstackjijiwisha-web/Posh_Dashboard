@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { ShieldCheck } from 'lucide-react'
 import { useRole } from '../lib/role-context'
 import { ROLES, ROLE_LABEL, type Role } from '../lib/data/types'
@@ -15,9 +15,19 @@ export function SignInPage() {
 
   useDocumentTitle('Sign in')
 
-  if (currentRole) {
-    return <Navigate to="/dashboard" replace />
-  }
+  /**
+   * The root path always shows this screen, even with a session open.
+   *
+   * It used to redirect to the dashboard whenever a role was stored, which meant that
+   * once you had signed in once you could never reach the sign-in screen again without
+   * signing out — and picking a role is the first thing anyone wants to do here.
+   *
+   * That redirect was never what deep linking needed. Prompt 1 asked that a *reload of a
+   * route* keeps its route and role, which `AppLayout` handles; `/` is not a route
+   * somebody was on, it is the front door. So the front door stays open, and an existing
+   * session is offered as a shortcut rather than imposed as a destination.
+   */
+  const returning = currentRole ? USER_BY_ROLE[currentRole] : null
 
   const enter = (role: Role) => {
     setRole(role)
@@ -90,13 +100,32 @@ export function SignInPage() {
             Sign in
           </button>
 
+          {/* An open session is a shortcut back, not a redirect past this screen. */}
+          {returning && currentRole && (
+            <div className="signin-resume">
+              <span className="avatar sm">{returning.initials}</span>
+              <span className="signin-resume-text">
+                Still signed in as <strong>{returning.name}</strong>
+                <span>{ROLE_LABEL[currentRole]}</span>
+              </span>
+              <button type="button" className="btn btn-secondary" onClick={() => navigate('/dashboard')}>
+                Continue
+              </button>
+            </div>
+          )}
+
           <div className="demo-divider">
             <span>Demo — sign in as</span>
           </div>
 
           <div className="role-chips">
             {ROLES.map((role) => (
-              <button key={role} type="button" className="role-chip" onClick={() => enter(role)}>
+              <button
+                key={role}
+                type="button"
+                className={`role-chip${role === currentRole ? ' current' : ''}`}
+                onClick={() => enter(role)}
+              >
                 <span className="avatar sm">{USER_BY_ROLE[role].initials}</span>
                 <span className="role-chip-name">{ROLE_LABEL[role]}</span>
               </button>
@@ -105,7 +134,8 @@ export function SignInPage() {
         </form>
 
         <p className="signin-note">
-          Prototype — no backend, no persistence. Refreshing returns to this screen.
+          Prototype — no backend. Your role is remembered so a shared case link survives a
+          reload; this screen stays reachable at any time.
         </p>
       </section>
     </div>
